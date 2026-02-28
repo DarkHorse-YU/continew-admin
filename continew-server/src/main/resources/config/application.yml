@@ -228,6 +228,16 @@ continew-starter.tenant:
     - sys_sms_log # 短信日志表
     - sys_client # 客户端表
     - sys_app # 应用表
+    - subsidy_form_template # 补贴表单模板表
+    - subsidy_form_field # 补贴表单字段表
+    - subsidy_activity # 补贴活动表
+    - subsidy_application # 补贴申请表
+    - subsidy_submission # 补贴提交表
+    - subsidy_submission_field_value # 补贴提交字段值表
+    - subsidy_review_issue # 补贴审核问题表
+    - subsidy_file # 补贴文件表
+    - subsidy_ocr_result # OCR 留痕表
+    - subsidy_reviewer_scope # 审核员客户授权表
   # 忽略菜单 ID（租户不能使用的菜单）
   ignore-menus:
     - 1050 # 菜单管理

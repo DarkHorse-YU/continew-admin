@@ -5,29 +5,20 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>top.continew.admin</groupId>
-        <artifactId>continew-admin</artifactId>
+        <artifactId>continew-plugin</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>continew-plugin</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>continew-plugin-activity</artifactId>
+    <packaging>jar</packaging>
 
     <name>${project.artifactId}</name>
-    <description>插件模块（存放能力开放、租户等扩展模块）</description>
-
-    <modules>
-        <module>continew-plugin-activity</module>
-        <module>continew-plugin-open</module>
-        <module>continew-plugin-tenant</module>
-        <module>continew-plugin-schedule</module>
-        <module>continew-plugin-generator</module>
-    </modules>
+    <description>??????</description>
 
     <dependencies>
-        <!-- 公共模块 -->
         <dependency>
             <groupId>top.continew.admin</groupId>
-            <artifactId>continew-common</artifactId>
+            <artifactId>continew-system</artifactId>
         </dependency>
     </dependencies>
 </project>

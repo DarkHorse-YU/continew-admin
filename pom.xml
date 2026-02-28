@@ -69,6 +69,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 活动插件（后续会改造为独立插件） -->
+            <dependency>
+                <groupId>top.continew.admin</groupId>
+                <artifactId>continew-plugin-activity</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <!-- 租户插件（后续会改造为独立插件） -->
             <dependency>
                 <groupId>top.continew.admin</groupId>

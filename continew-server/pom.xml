@@ -28,6 +28,12 @@
             <artifactId>continew-plugin-open</artifactId>
         </dependency>
 
+        <!-- 活动插件 -->
+        <dependency>
+            <groupId>top.continew.admin</groupId>
+            <artifactId>continew-plugin-activity</artifactId>
+        </dependency>
+
         <!-- 租户插件 -->
         <dependency>
             <groupId>top.continew.admin</groupId>

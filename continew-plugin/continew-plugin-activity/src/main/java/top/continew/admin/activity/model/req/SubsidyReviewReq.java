@@ -1,0 +1,72 @@
+/*
+ * Copyright (c) 2022-present Charles7c Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package top.continew.admin.activity.model.req;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+import java.io.Serial;
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 管理端审核请求。
+ *
+ * @author OpenCode
+ * @since 2026/2/28 15:00
+ */
+@Data
+@Schema(description = "管理端审核请求")
+public class SubsidyReviewReq implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    @NotNull(message = "审核结果不能为空")
+    @Schema(description = "是否通过", requiredMode = Schema.RequiredMode.REQUIRED, example = "true")
+    private Boolean approved;
+
+    @Schema(description = "审核备注")
+    private String reviewComment;
+
+    @Schema(description = "最终补贴金额")
+    private BigDecimal finalSubsidyAmount;
+
+    @Valid
+    @Schema(description = "驳回问题列表（驳回时必填）")
+    private List<IssueReq> issues = new ArrayList<>();
+
+    @Data
+    @Schema(description = "字段驳回问题")
+    public static class IssueReq implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        @NotNull(message = "字段编码不能为空")
+        private String fieldCode;
+
+        @NotNull(message = "问题描述不能为空")
+        private String issueMessage;
+
+        private String issueCode;
+    }
+}
