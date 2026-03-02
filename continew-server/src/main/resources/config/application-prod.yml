@@ -287,3 +287,27 @@ snail-job:
   group: ${SCHEDULE_GROUP:continew-admin}
   # 接入组 token
   token: ${SCHEDULE_TOKEN:SJ_Wyz3dmsdbDOkDujOTSSoBjGQP1BMsVnj}
+
+--- ### Activity Subsidy Config
+activity:
+  subsidy:
+    upload-parent-path: /activity/subsidy/
+    storage-code: dev-minio
+    ocr:
+      enabled: false
+      api-key: ''
+      secret-key: ''
+      endpoints:
+        id_card_portrait: ''
+        id_card_emblem: ''
+        bank_card: ''
+        invoice_image: ''
+        driving_license_main: ''
+    safety:
+      enabled: false
+      secret-id: ''
+      secret-key: ''
+      region: 'ap-guangzhou'
+      endpoint: 'ims.tencentcloudapi.com'
+      biz-type: 'TencentCloudDefault'
+      timeout-ms: 3000

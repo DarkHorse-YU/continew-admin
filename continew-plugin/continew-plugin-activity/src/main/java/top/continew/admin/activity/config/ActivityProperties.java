@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,17 +25,17 @@ import java.util.Map;
 
 /**
  * 补贴活动配置项。
- *
- * @author OpenCode
- * @since 2026/2/28 15:00
  */
 @Data
 @Component
 @ConfigurationProperties(prefix = "activity.subsidy")
 public class ActivityProperties {
 
-    /** 文件上传父目录。 */
+    /** 上传文件默认父目录。 */
     private String uploadParentPath = "/activity/subsidy/";
+
+    /** 文件上传使用的存储配置编码。 */
+    private String storageCode = "dev-minio";
 
     /** OCR 配置。 */
     private Ocr ocr = new Ocr();
@@ -46,24 +46,41 @@ public class ActivityProperties {
     @Data
     public static class Ocr {
 
+        /** 是否开启 OCR。 */
         private boolean enabled;
 
+        /** 百度 OCR API Key。 */
         private String apiKey;
 
+        /** 百度 OCR Secret Key。 */
         private String secretKey;
 
-        /** key: ocr_mapping_key，value: 百度 OCR 接口地址。 */
+        /** key: ocr_mapping_key，value: OCR 接口地址。 */
         private Map<String, String> endpoints = new HashMap<>();
     }
 
     @Data
     public static class Safety {
 
+        /** 是否开启图片安全检测。 */
         private boolean enabled;
 
-        /** 腾讯天御检测接口地址。 */
+        /** 腾讯云 SecretId。 */
+        private String secretId;
+
+        /** 腾讯云 SecretKey。 */
+        private String secretKey;
+
+        /** 地域，例如 ap-guangzhou。 */
+        private String region;
+
+        /** 接口域名，默认 ims.tencentcloudapi.com。 */
         private String endpoint;
 
+        /** 业务类型（BizType），例如 TencentCloudDefault。 */
+        private String bizType;
+
+        /** 接口超时（毫秒）。 */
         private Integer timeoutMs = 3000;
     }
 }

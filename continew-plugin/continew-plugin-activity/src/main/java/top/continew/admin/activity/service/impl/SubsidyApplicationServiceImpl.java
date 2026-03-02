@@ -26,6 +26,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.x.file.storage.core.FileInfo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +60,7 @@ import java.util.stream.Collectors;
  * 补贴申报业务实现。
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class SubsidyApplicationServiceImpl implements SubsidyApplicationService {
 
@@ -88,9 +90,9 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         CheckUtils.throwIfNull(template, "模板不存在");
 
         List<SubsidyFormFieldDO> fields = formFieldMapper.selectList(new LambdaQueryWrapper<SubsidyFormFieldDO>()
-            .eq(SubsidyFormFieldDO::getTemplateId, template.getId())
-            .eq(SubsidyFormFieldDO::getStatus, 1)
-            .orderByAsc(SubsidyFormFieldDO::getSortNo));
+                .eq(SubsidyFormFieldDO::getTemplateId, template.getId())
+                .eq(SubsidyFormFieldDO::getStatus, 1)
+                .orderByAsc(SubsidyFormFieldDO::getSortNo));
 
         SubsidyFormResp resp = new SubsidyFormResp();
         resp.setActivityId(activity.getId());
@@ -103,7 +105,11 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         resp.setTemplateCode(template.getTemplateCode());
         resp.setTemplateName(template.getTemplateName());
         resp.setTemplateVersion(template.getVersionNo());
-        resp.setFields(fields.stream().map(field -> BeanUtil.copyProperties(field, SubsidyFormResp.FieldResp.class)).toList());
+        resp.setFields(fields.stream().map(field -> {
+            SubsidyFormResp.FieldResp fieldResp = BeanUtil.copyProperties(field, SubsidyFormResp.FieldResp.class);
+            fieldResp.setFieldId(field.getId());
+            return fieldResp;
+        }).toList());
         return resp;
     }
 
@@ -114,7 +120,8 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
     public SubsidyFileUploadResp upload(MultipartFile file, String parentPath, Boolean needOcr, String ocrMappingKey) {
         CheckUtils.throwIf(file.isEmpty(), "文件不能为空");
         try {
-            FileInfo fileInfo = fileService.upload(file, StrUtil.blankToDefault(parentPath, properties.getUploadParentPath()));
+            FileInfo fileInfo = fileService.upload(file, StrUtil.blankToDefault(parentPath, properties.getUploadParentPath()),
+                    properties.getStorageCode());
             imageContentCheckService.checkImage(fileInfo.getUrl());
 
             String ocrText = null;
@@ -133,18 +140,26 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             subsidyFileMapper.insert(fileDO);
 
             return SubsidyFileUploadResp.builder()
-                .subsidyFileId(fileDO.getId())
-                .url(fileInfo.getUrl())
-                .thUrl(fileInfo.getThUrl())
-                .ocrText(ocrText)
-                .build();
+                    .subsidyFileId(fileDO.getId())
+                    .url(fileInfo.getUrl())
+                    .thUrl(fileInfo.getThUrl())
+                    .ocrText(ocrText)
+                    .build();
         } catch (Exception e) {
-            throw new BusinessException(StrUtil.blankToDefault(e.getMessage(), "上传失败"));
+            Throwable root = e;
+            while (root.getCause() != null) {
+                root = root.getCause();
+            }
+            String rootMsg = StrUtil.blankToDefault(root.getMessage(), "");
+            log.error("subsidy file upload failed, storageCode={}, parentPath={}, fileName={}, rootCause={}",
+                    properties.getStorageCode(), StrUtil.blankToDefault(parentPath, properties.getUploadParentPath()),
+                    file.getOriginalFilename(), rootMsg, e);
+            throw new BusinessException(StrUtil.format("上传失败: {}", StrUtil.blankToDefault(rootMsg, e.getMessage())));
         }
     }
 
     /**
-     * 首次提交申报。
+     * ???????????
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -153,17 +168,17 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         SubsidyActivityDO activity = this.getActiveActivity(req.getActivityId());
 
         SubsidyApplicationDO application = applicationMapper.selectOne(new LambdaQueryWrapper<SubsidyApplicationDO>()
-            .eq(SubsidyApplicationDO::getActivityId, req.getActivityId())
-            .eq(SubsidyApplicationDO::getUserId, userId));
+                .eq(SubsidyApplicationDO::getActivityId, req.getActivityId())
+                .eq(SubsidyApplicationDO::getUserId, userId));
 
         if (application == null) {
             application = this.createApplication(req.getActivityId(), activity.getCustomerId(), userId);
         } else {
             CheckUtils.throwIfNotEqual(activity.getCustomerId(), application.getCustomerId(), "客户归属不一致");
             CheckUtils.throwIf(StrUtil.equals(application.getCurrentStatus(), SubsidyConstants.APP_STATUS_PENDING),
-                "当前申报正在审核中，请勿重复提交");
+                    "当前申报正在审核中，请勿重复提交");
             CheckUtils.throwIf(StrUtil.equals(application.getCurrentStatus(), SubsidyConstants.APP_STATUS_APPROVED),
-                "当前活动已申报通过，无需重复提交");
+                    "当前活动已申报通过，无需重复提交");
         }
         return this.doSubmit(activity, application, req, userId, false);
     }
@@ -179,7 +194,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         CheckUtils.throwIfNull(application, "申报记录不存在");
         CheckUtils.throwIfNotEqual(userId, application.getUserId(), "无权限操作该申报记录");
         CheckUtils.throwIfNotEqual(SubsidyConstants.APP_STATUS_REJECTED, application.getCurrentStatus(),
-            "仅驳回记录允许重新提交");
+                "仅驳回记录允许重新提交");
 
         SubsidyActivityDO activity = this.getActiveActivity(req.getActivityId());
         CheckUtils.throwIfNotEqual(application.getActivityId(), activity.getId(), "活动 ID 与申请不一致");
@@ -195,11 +210,11 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
     public PageResp<SubsidyMyApplicationResp> pageMyApplications(SubsidyMyApplicationQuery query, PageQuery pageQuery) {
         Long userId = UserContextHolder.getUserId();
         LambdaQueryWrapper<SubsidyApplicationDO> wrapper = new LambdaQueryWrapper<SubsidyApplicationDO>()
-            .eq(SubsidyApplicationDO::getUserId, userId)
-            .eq(StrUtil.isNotBlank(query.getCurrentStatus()), SubsidyApplicationDO::getCurrentStatus, query.getCurrentStatus())
-            .ge(query.getStartTime() != null, SubsidyApplicationDO::getCreatedAt, query.getStartTime())
-            .le(query.getEndTime() != null, SubsidyApplicationDO::getCreatedAt, query.getEndTime())
-            .orderByDesc(SubsidyApplicationDO::getCreatedAt);
+                .eq(SubsidyApplicationDO::getUserId, userId)
+                .eq(StrUtil.isNotBlank(query.getCurrentStatus()), SubsidyApplicationDO::getCurrentStatus, query.getCurrentStatus())
+                .ge(query.getStartTime() != null, SubsidyApplicationDO::getCreatedAt, query.getStartTime())
+                .le(query.getEndTime() != null, SubsidyApplicationDO::getCreatedAt, query.getEndTime())
+                .orderByDesc(SubsidyApplicationDO::getCreatedAt);
 
         IPage<SubsidyApplicationDO> page = applicationMapper.selectPage(new Page<>(pageQuery.getPage(), pageQuery.getSize()), wrapper);
         Map<Long, SubsidyActivityDO> activityMap = this.listActivityMap(page.getRecords().stream().map(SubsidyApplicationDO::getActivityId).toList());
@@ -231,32 +246,32 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
      */
     @Override
     public PageResp<SubsidyAdminApplicationResp> pageApplicationsForAdmin(SubsidyAdminApplicationQuery query,
-                                                                           PageQuery pageQuery) {
+                                                                          PageQuery pageQuery) {
         List<Long> customerIds = this.listReviewerCustomerIds(UserContextHolder.getUserId());
         if (CollUtil.isEmpty(customerIds)) {
             return PageResp.build(pageQuery.getPage(), pageQuery.getSize(), Collections.emptyList());
         }
 
         LambdaQueryWrapper<SubsidyApplicationDO> wrapper = new LambdaQueryWrapper<SubsidyApplicationDO>()
-            .in(SubsidyApplicationDO::getCustomerId, customerIds)
-            .like(StrUtil.isNotBlank(query.getApplicationNo()), SubsidyApplicationDO::getApplicationNo, query.getApplicationNo())
-            .eq(StrUtil.isNotBlank(query.getCurrentStatus()), SubsidyApplicationDO::getCurrentStatus, query.getCurrentStatus())
-            .eq(query.getCustomerId() != null, SubsidyApplicationDO::getCustomerId, query.getCustomerId())
-            .ge(query.getStartTime() != null, SubsidyApplicationDO::getCreatedAt, query.getStartTime())
-            .le(query.getEndTime() != null, SubsidyApplicationDO::getCreatedAt, query.getEndTime())
-            .orderByDesc(SubsidyApplicationDO::getCreatedAt);
+                .in(SubsidyApplicationDO::getCustomerId, customerIds)
+                .like(StrUtil.isNotBlank(query.getApplicationNo()), SubsidyApplicationDO::getApplicationNo, query.getApplicationNo())
+                .eq(StrUtil.isNotBlank(query.getCurrentStatus()), SubsidyApplicationDO::getCurrentStatus, query.getCurrentStatus())
+                .eq(query.getCustomerId() != null, SubsidyApplicationDO::getCustomerId, query.getCustomerId())
+                .ge(query.getStartTime() != null, SubsidyApplicationDO::getCreatedAt, query.getStartTime())
+                .le(query.getEndTime() != null, SubsidyApplicationDO::getCreatedAt, query.getEndTime())
+                .orderByDesc(SubsidyApplicationDO::getCreatedAt);
 
         if (StrUtil.isNotBlank(query.getCarType())) {
             List<Long> carTypeFieldIds = formFieldMapper.selectList(new LambdaQueryWrapper<SubsidyFormFieldDO>()
-                    .eq(SubsidyFormFieldDO::getFieldCode, "car_type"))
-                .stream()
-                .map(SubsidyFormFieldDO::getId)
-                .toList();
+                            .eq(SubsidyFormFieldDO::getFieldCode, "car_type"))
+                    .stream()
+                    .map(SubsidyFormFieldDO::getId)
+                    .toList();
             if (CollUtil.isEmpty(carTypeFieldIds)) {
                 return PageResp.build(pageQuery.getPage(), pageQuery.getSize(), Collections.emptyList());
             }
             List<Long> submissionIds = submissionFieldValueMapper.selectSubmissionIdsByFieldIdsAndCarType(carTypeFieldIds,
-                query.getCarType());
+                    query.getCarType());
             if (CollUtil.isEmpty(submissionIds)) {
                 return PageResp.build(pageQuery.getPage(), pageQuery.getSize(), Collections.emptyList());
             }
@@ -298,7 +313,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         CheckUtils.throwIfNull(application, "申报记录不存在");
         this.checkAdminScope(application.getCustomerId());
         CheckUtils.throwIfNotEqual(SubsidyConstants.APP_STATUS_PENDING, application.getCurrentStatus(),
-            "当前状态不允许审核");
+                "当前状态不允许审核");
 
         SubsidySubmissionDO submission = submissionMapper.selectById(application.getCurrentSubmissionId());
         CheckUtils.throwIfNull(submission, "当前提交版本不存在");
@@ -317,11 +332,11 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             submissionMapper.updateById(submission);
 
             this.updateApplicationWithVersion(application,
-                new LambdaUpdateWrapper<SubsidyApplicationDO>()
-                    .set(SubsidyApplicationDO::getCurrentStatus, application.getCurrentStatus())
-                    .set(SubsidyApplicationDO::getApprovedAt, application.getApprovedAt())
-                    .set(SubsidyApplicationDO::getFinalSubsidyAmount, application.getFinalSubsidyAmount())
-                    .set(SubsidyApplicationDO::getFinalSubsidyDecidedAt, application.getFinalSubsidyDecidedAt()));
+                    new LambdaUpdateWrapper<SubsidyApplicationDO>()
+                            .set(SubsidyApplicationDO::getCurrentStatus, application.getCurrentStatus())
+                            .set(SubsidyApplicationDO::getApprovedAt, application.getApprovedAt())
+                            .set(SubsidyApplicationDO::getFinalSubsidyAmount, application.getFinalSubsidyAmount())
+                            .set(SubsidyApplicationDO::getFinalSubsidyDecidedAt, application.getFinalSubsidyDecidedAt()));
             return;
         }
 
@@ -331,9 +346,9 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         this.createReviewIssues(application, submission, req.getIssues());
 
         this.updateApplicationWithVersion(application,
-            new LambdaUpdateWrapper<SubsidyApplicationDO>()
-                .set(SubsidyApplicationDO::getCurrentStatus, SubsidyConstants.APP_STATUS_REJECTED)
-                .setSql("reject_count = reject_count + 1"));
+                new LambdaUpdateWrapper<SubsidyApplicationDO>()
+                        .set(SubsidyApplicationDO::getCurrentStatus, SubsidyConstants.APP_STATUS_REJECTED)
+                        .setSql("reject_count = reject_count + 1"));
     }
 
     private SubsidyApplicationDetailResp buildDetail(SubsidyApplicationDO application) {
@@ -349,20 +364,20 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         }
 
         SubsidyApplicationDetailResp.SubmissionResp submissionResp = BeanUtil.copyProperties(submission,
-            SubsidyApplicationDetailResp.SubmissionResp.class);
+                SubsidyApplicationDetailResp.SubmissionResp.class);
         submissionResp.setSubmissionId(submission.getId());
 
         List<SubsidyFormFieldDO> fields = formFieldMapper.selectList(new LambdaQueryWrapper<SubsidyFormFieldDO>()
-            .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId()));
+                .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId()));
         Map<Long, SubsidyFormFieldDO> fieldMap = fields.stream().collect(Collectors.toMap(SubsidyFormFieldDO::getId, s -> s));
 
         List<SubsidySubmissionFieldValueDO> values = submissionFieldValueMapper.selectList(
-            new LambdaQueryWrapper<SubsidySubmissionFieldValueDO>()
-                .eq(SubsidySubmissionFieldValueDO::getSubmissionId, submission.getId())
-                .orderByAsc(SubsidySubmissionFieldValueDO::getFieldId, SubsidySubmissionFieldValueDO::getValueSeq));
+                new LambdaQueryWrapper<SubsidySubmissionFieldValueDO>()
+                        .eq(SubsidySubmissionFieldValueDO::getSubmissionId, submission.getId())
+                        .orderByAsc(SubsidySubmissionFieldValueDO::getFieldId, SubsidySubmissionFieldValueDO::getValueSeq));
         submissionResp.setFieldValues(values.stream().map(value -> {
             SubsidyApplicationDetailResp.FieldValueResp item = BeanUtil.copyProperties(value,
-                SubsidyApplicationDetailResp.FieldValueResp.class);
+                    SubsidyApplicationDetailResp.FieldValueResp.class);
             SubsidyFormFieldDO field = fieldMap.get(value.getFieldId());
             if (field != null) {
                 item.setFieldCode(field.getFieldCode());
@@ -372,11 +387,11 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         }).toList());
 
         List<SubsidyReviewIssueDO> issues = reviewIssueMapper.selectList(new LambdaQueryWrapper<SubsidyReviewIssueDO>()
-            .eq(SubsidyReviewIssueDO::getSubmissionId, submission.getId())
-            .orderByDesc(SubsidyReviewIssueDO::getCreatedAt));
+                .eq(SubsidyReviewIssueDO::getSubmissionId, submission.getId())
+                .orderByDesc(SubsidyReviewIssueDO::getCreatedAt));
         submissionResp.setIssues(issues.stream().map(issue -> {
             SubsidyApplicationDetailResp.ReviewIssueResp item = BeanUtil.copyProperties(issue,
-                SubsidyApplicationDetailResp.ReviewIssueResp.class);
+                    SubsidyApplicationDetailResp.ReviewIssueResp.class);
             SubsidyFormFieldDO field = fieldMap.get(issue.getFieldId());
             if (field != null) {
                 item.setFieldCode(field.getFieldCode());
@@ -395,23 +410,23 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
                           Long userId,
                           boolean resubmit) {
         Map<String, SubsidyFormFieldDO> fieldMap = formFieldMapper.selectList(new LambdaQueryWrapper<SubsidyFormFieldDO>()
-                .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId())
-                .eq(SubsidyFormFieldDO::getStatus, 1))
-            .stream()
-            .collect(Collectors.toMap(SubsidyFormFieldDO::getFieldCode, s -> s));
+                        .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId())
+                        .eq(SubsidyFormFieldDO::getStatus, 1))
+                .stream()
+                .collect(Collectors.toMap(SubsidyFormFieldDO::getFieldCode, s -> s));
 
         this.validateSubmitFields(req, fieldMap);
 
         int submissionNo = submissionMapper.selectCount(new LambdaQueryWrapper<SubsidySubmissionDO>()
-            .eq(SubsidySubmissionDO::getApplicationId, application.getId())).intValue() + 1;
+                .eq(SubsidySubmissionDO::getApplicationId, application.getId())).intValue() + 1;
 
         SubsidySubmissionDO submission = new SubsidySubmissionDO();
         submission.setCustomerId(activity.getCustomerId());
         submission.setApplicationId(application.getId());
         submission.setSubmissionNo(submissionNo);
         submission.setStatus(StrUtil.equals(activity.getAuditMode(), SubsidyConstants.AUDIT_MODE_NONE)
-            ? SubsidyConstants.SUBMISSION_STATUS_APPROVED
-            : SubsidyConstants.SUBMISSION_STATUS_UNDER_REVIEW);
+                ? SubsidyConstants.SUBMISSION_STATUS_APPROVED
+                : SubsidyConstants.SUBMISSION_STATUS_UNDER_REVIEW);
         submission.setSubmittedAt(LocalDateTime.now());
         if (StrUtil.equals(submission.getStatus(), SubsidyConstants.SUBMISSION_STATUS_APPROVED)) {
             submission.setReviewedAt(LocalDateTime.now());
@@ -440,13 +455,13 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         }
 
         String nextStatus = StrUtil.equals(activity.getAuditMode(), SubsidyConstants.AUDIT_MODE_NONE)
-            ? SubsidyConstants.APP_STATUS_APPROVED
-            : SubsidyConstants.APP_STATUS_PENDING;
+                ? SubsidyConstants.APP_STATUS_APPROVED
+                : SubsidyConstants.APP_STATUS_PENDING;
         LambdaUpdateWrapper<SubsidyApplicationDO> updateWrapper = new LambdaUpdateWrapper<SubsidyApplicationDO>()
-            .set(SubsidyApplicationDO::getCurrentStatus, nextStatus)
-            .set(SubsidyApplicationDO::getCurrentSubmissionId, submission.getId())
-            .set(StrUtil.equals(nextStatus, SubsidyConstants.APP_STATUS_APPROVED), SubsidyApplicationDO::getApprovedAt,
-                LocalDateTime.now());
+                .set(SubsidyApplicationDO::getCurrentStatus, nextStatus)
+                .set(SubsidyApplicationDO::getCurrentSubmissionId, submission.getId())
+                .set(StrUtil.equals(nextStatus, SubsidyConstants.APP_STATUS_APPROVED), SubsidyApplicationDO::getApprovedAt,
+                        LocalDateTime.now());
         this.updateApplicationWithVersion(application, updateWrapper);
 
         if (resubmit && application.getCurrentSubmissionId() != null) {
@@ -474,9 +489,9 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
                                     List<SubsidyReviewReq.IssueReq> issues) {
         SubsidyActivityDO activity = activityMapper.selectById(application.getActivityId());
         Map<String, SubsidyFormFieldDO> fieldMap = formFieldMapper.selectList(new LambdaQueryWrapper<SubsidyFormFieldDO>()
-                .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId()))
-            .stream()
-            .collect(Collectors.toMap(SubsidyFormFieldDO::getFieldCode, s -> s));
+                        .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId()))
+                .stream()
+                .collect(Collectors.toMap(SubsidyFormFieldDO::getFieldCode, s -> s));
 
         for (SubsidyReviewReq.IssueReq issueReq : issues) {
             SubsidyFormFieldDO field = fieldMap.get(issueReq.getFieldCode());
@@ -493,14 +508,14 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
 
     private void validateSubmitFields(SubsidySubmitReq req, Map<String, SubsidyFormFieldDO> fieldMap) {
         Set<String> submitFieldCodes = req.getFieldValues().stream()
-            .map(SubsidySubmitReq.FieldValueReq::getFieldCode)
-            .collect(Collectors.toSet());
+                .map(SubsidySubmitReq.FieldValueReq::getFieldCode)
+                .collect(Collectors.toSet());
 
         List<String> missing = fieldMap.values().stream()
-            .filter(field -> Objects.equals(field.getIsRequired(), 1))
-            .map(SubsidyFormFieldDO::getFieldCode)
-            .filter(code -> !submitFieldCodes.contains(code))
-            .toList();
+                .filter(field -> Objects.equals(field.getIsRequired(), 1))
+                .map(SubsidyFormFieldDO::getFieldCode)
+                .filter(code -> !submitFieldCodes.contains(code))
+                .toList();
 
         CheckUtils.throwIf(CollUtil.isNotEmpty(missing), "缺少必填字段: %s", String.join(",", missing));
     }
@@ -532,15 +547,15 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
 
     private SubsidyActivityDO getActiveActivity(String activityCode) {
         SubsidyActivityDO activity = activityMapper.selectOne(new LambdaQueryWrapper<SubsidyActivityDO>()
-            .eq(SubsidyActivityDO::getActivityCode, activityCode)
-            .eq(SubsidyActivityDO::getStatus, 1)
-            .orderByDesc(SubsidyActivityDO::getId)
-            .last("limit 1"));
+                .eq(SubsidyActivityDO::getActivityCode, activityCode)
+                .eq(SubsidyActivityDO::getStatus, 1)
+                .orderByDesc(SubsidyActivityDO::getId)
+                .last("limit 1"));
         CheckUtils.throwIfNull(activity, "活动不存在或未启用");
 
         LocalDateTime now = LocalDateTime.now();
         CheckUtils.throwIf(now.isBefore(activity.getStartTime()) || now.isAfter(activity.getEndTime()),
-            "当前不在活动时间内");
+                "当前不在活动时间内");
         return activity;
     }
 
@@ -551,7 +566,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
 
         LocalDateTime now = LocalDateTime.now();
         CheckUtils.throwIf(now.isBefore(activity.getStartTime()) || now.isAfter(activity.getEndTime()),
-            "当前不在活动时间内");
+                "当前不在活动时间内");
         return activity;
     }
 
@@ -574,35 +589,35 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         }
         List<Long> customerIds = this.listReviewerCustomerIds(UserContextHolder.getUserId());
         CheckUtils.throwIf(CollUtil.isEmpty(customerIds) || !customerIds.contains(customerId),
-            "无权限访问该客户数据");
+                "无权限访问该客户数据");
     }
 
     private List<Long> listReviewerCustomerIds(Long reviewerUserId) {
         if (UserContextHolder.isSuperAdmin()) {
             return activityMapper.selectList(new LambdaQueryWrapper<SubsidyActivityDO>()
-                    .select(SubsidyActivityDO::getCustomerId)
-                    .groupBy(SubsidyActivityDO::getCustomerId))
-                .stream()
-                .map(SubsidyActivityDO::getCustomerId)
-                .filter(Objects::nonNull)
-                .toList();
+                            .select(SubsidyActivityDO::getCustomerId)
+                            .groupBy(SubsidyActivityDO::getCustomerId))
+                    .stream()
+                    .map(SubsidyActivityDO::getCustomerId)
+                    .filter(Objects::nonNull)
+                    .toList();
         }
 
         return reviewerScopeMapper.selectList(new LambdaQueryWrapper<SubsidyReviewerScopeDO>()
-                .eq(SubsidyReviewerScopeDO::getReviewerUserId, reviewerUserId)
-                .eq(SubsidyReviewerScopeDO::getStatus, 1))
-            .stream()
-            .map(SubsidyReviewerScopeDO::getCustomerId)
-            .distinct()
-            .toList();
+                        .eq(SubsidyReviewerScopeDO::getReviewerUserId, reviewerUserId)
+                        .eq(SubsidyReviewerScopeDO::getStatus, 1))
+                .stream()
+                .map(SubsidyReviewerScopeDO::getCustomerId)
+                .distinct()
+                .toList();
     }
 
     private void updateApplicationWithVersion(SubsidyApplicationDO application,
                                               LambdaUpdateWrapper<SubsidyApplicationDO> updateWrapper) {
         int updated = applicationMapper.update(null, updateWrapper
-            .eq(SubsidyApplicationDO::getId, application.getId())
-            .eq(SubsidyApplicationDO::getVersion, application.getVersion())
-            .setSql("version = version + 1"));
+                .eq(SubsidyApplicationDO::getId, application.getId())
+                .eq(SubsidyApplicationDO::getVersion, application.getVersion())
+                .setSql("version = version + 1"));
         CheckUtils.throwIf(updated == 0, "数据已变更，请刷新后重试");
         application.setVersion(application.getVersion() + 1);
     }
@@ -612,7 +627,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             return Collections.emptyMap();
         }
         return activityMapper.selectBatchIds(activityIds).stream()
-            .collect(Collectors.toMap(SubsidyActivityDO::getId, s -> s, (a, b) -> a));
+                .collect(Collectors.toMap(SubsidyActivityDO::getId, s -> s, (a, b) -> a));
     }
 
     private String getCarType(Long applicationId, Long templateId) {
@@ -621,17 +636,17 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             return null;
         }
         SubsidyFormFieldDO field = formFieldMapper.selectOne(new LambdaQueryWrapper<SubsidyFormFieldDO>()
-            .eq(SubsidyFormFieldDO::getTemplateId, templateId)
-            .eq(SubsidyFormFieldDO::getFieldCode, "car_type")
-            .last("limit 1"));
+                .eq(SubsidyFormFieldDO::getTemplateId, templateId)
+                .eq(SubsidyFormFieldDO::getFieldCode, "car_type")
+                .last("limit 1"));
         if (field == null) {
             return null;
         }
         SubsidySubmissionFieldValueDO value = submissionFieldValueMapper.selectOne(new LambdaQueryWrapper<SubsidySubmissionFieldValueDO>()
-            .eq(SubsidySubmissionFieldValueDO::getSubmissionId, application.getCurrentSubmissionId())
-            .eq(SubsidySubmissionFieldValueDO::getFieldId, field.getId())
-            .orderByAsc(SubsidySubmissionFieldValueDO::getValueSeq)
-            .last("limit 1"));
+                .eq(SubsidySubmissionFieldValueDO::getSubmissionId, application.getCurrentSubmissionId())
+                .eq(SubsidySubmissionFieldValueDO::getFieldId, field.getId())
+                .orderByAsc(SubsidySubmissionFieldValueDO::getValueSeq)
+                .last("limit 1"));
         if (value == null) {
             return null;
         }
