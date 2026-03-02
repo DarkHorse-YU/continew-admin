@@ -52,7 +52,7 @@ public class TencentSubsidyImageContentCheckServiceImpl implements SubsidyImageC
             throw new BusinessException("未配置图片安全检测地址，请检查 activity.subsidy.safety.endpoint");
         }
         try {
-            String body = HttpUtil.toJsonStr(Map.of("imageUrl", imageUrl));
+            String body = JSONUtil.toJsonStr(Map.of("imageUrl", imageUrl));
             String response = HttpRequest.post(safety.getEndpoint())
                 .body(body)
                 .timeout(safety.getTimeoutMs())
