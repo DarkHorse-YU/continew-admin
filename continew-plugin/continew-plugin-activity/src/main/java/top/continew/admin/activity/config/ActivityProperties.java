@@ -55,8 +55,18 @@ public class ActivityProperties {
         /** 百度 OCR Secret Key。 */
         private String secretKey;
 
-        /** key: ocr_mapping_key，value: OCR 接口地址。 */
-        private Map<String, String> endpoints = new HashMap<>();
+        /** key: ocr_mapping_key，value: OCR 接口配置。 */
+        private Map<String, Endpoint> endpoints = new HashMap<>();
+    }
+
+    @Data
+    public static class Endpoint {
+
+        /** OCR 接口地址。 */
+        private String url;
+
+        /** 额外参数，例如身份证的 id_card_side=front。 */
+        private Map<String, String> params = new HashMap<>();
     }
 
     @Data

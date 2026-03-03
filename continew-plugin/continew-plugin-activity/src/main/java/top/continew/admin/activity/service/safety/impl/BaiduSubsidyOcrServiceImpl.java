@@ -20,7 +20,9 @@ import cn.hutool.core.codec.Base64;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.ContentType;
 import cn.hutool.http.HttpRequest;
-import cn.hutool.http.HttpUtil;
+import cn.hutool.http.HttpResponse;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,8 @@ import top.continew.admin.activity.service.safety.SubsidyOcrService;
 import top.continew.starter.core.exception.BusinessException;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -53,46 +57,107 @@ public class BaiduSubsidyOcrServiceImpl implements SubsidyOcrService {
         if (!ocr.isEnabled() || StrUtil.isBlank(mappingKey)) {
             return null;
         }
-        String endpoint = ocr.getEndpoints().get(mappingKey);
-        if (StrUtil.isBlank(endpoint)) {
+        ActivityProperties.Endpoint endpointConfig = ocr.getEndpoints().get(mappingKey);
+        if (endpointConfig == null || StrUtil.isBlank(endpointConfig.getUrl())) {
             return null;
         }
         String accessToken = this.getAccessToken(ocr);
         try {
+            // 1. 将图片转为base64并进行URL编码（参考官方示例）
             String imageBase64 = Base64.encode(file.getBytes());
-            String body = HttpUtil.toParams(Map.of("image", imageBase64));
-            String response = HttpRequest.post(endpoint + "?access_token=" + accessToken)
-                .contentType(ContentType.FORM_URLENCODED.toString())
-                .body(body)
-                .timeout(5000)
-                .execute()
-                .body();
+            String imageParam = URLEncoder.encode(imageBase64, StandardCharsets.UTF_8);
+
+            // 2. 构造请求参数（参考官方示例：image需要URL编码）
+            StringBuilder paramBuilder = new StringBuilder("image=");
+            paramBuilder.append(imageParam);
+
+            // 3. 添加配置中的额外参数
+            Map<String, String> extraParams = endpointConfig.getParams();
+            if (extraParams != null) {
+                extraParams.forEach((key, value) -> paramBuilder.append("&").append(key).append("=").append(value));
+            }
+
+            String param = paramBuilder.toString();
+
+            // 4. 发送请求（参考官方示例：access_token作为URL参数）
+            String url = endpointConfig.getUrl() + "?access_token=" + accessToken;
+            String response;
+            try (HttpResponse httpResponse = HttpRequest.post(url)
+                    .contentType(ContentType.FORM_URLENCODED.toString())
+                    .body(param)
+                    .timeout(5000)
+                    .execute()) {
+                response = httpResponse.body();
+            }
+
             if (!JSONUtil.isTypeJSON(response)) {
+                log.warn("OCR 返回非JSON响应: {}", response);
                 return null;
             }
-            return JSONUtil.parseObj(response)
-                .getJSONArray("words_result")
-                .stream()
-                .map(item -> JSONUtil.parseObj(item).getStr("words"))
-                .filter(StrUtil::isNotBlank)
-                .reduce((a, b) -> a + "\n" + b)
-                .orElse(null);
+
+            JSONObject responseObj = JSONUtil.parseObj(response);
+
+            // 检查是否有错误码
+            String errorCode = responseObj.getStr("error_code");
+            if (StrUtil.isNotBlank(errorCode)) {
+                log.warn("OCR 返回错误: error_code={}, error_msg={}", errorCode, responseObj.getStr("error_msg"));
+                return null;
+            }
+
+            // 获取 words_result，兼容不同OCR接口返回格式
+            Object wordsResult = responseObj.get("words_result");
+            if (wordsResult == null) {
+                log.warn("OCR 返回数据中没有 words_result: {}", response);
+                return null;
+            }
+
+            // 处理不同类型的 words_result
+            StringBuilder resultBuilder = new StringBuilder();
+            if (wordsResult instanceof JSONArray jsonArray) {
+                // 通用OCR等接口返回数组格式
+                jsonArray.stream()
+                    .map(item -> JSONUtil.parseObj(item).getStr("words"))
+                    .filter(StrUtil::isNotBlank)
+                    .forEach(words -> {
+                        if (!resultBuilder.isEmpty()) {
+                            resultBuilder.append("\n");
+                        }
+                        resultBuilder.append(words);
+                    });
+            } else if (wordsResult instanceof JSONObject wordsObj) {
+                // 身份证等接口返回对象格式
+                wordsObj.forEach((key, value) -> {
+                    if (value instanceof JSONObject valueObj) {
+                        String words = valueObj.getStr("words");
+                        if (StrUtil.isNotBlank(words)) {
+                            if (!resultBuilder.isEmpty()) {
+                                resultBuilder.append("\n");
+                            }
+                            resultBuilder.append(words);
+                        }
+                    }
+                });
+            }
+
+            return !resultBuilder.isEmpty() ? resultBuilder.toString() : null;
         } catch (IOException e) {
-            throw new BusinessException("OCR 识别失败");
+            throw new BusinessException("OCR 识别失败: " + e.getMessage());
         } catch (Exception e) {
-            log.warn("OCR 调用失败: {}", e.getMessage());
+            log.warn("OCR 调用失败: {}", e.getMessage(), e);
             return null;
         }
     }
 
     private String getAccessToken(ActivityProperties.Ocr ocr) {
-        String response = HttpRequest.get(TOKEN_URL)
-            .form("grant_type", "client_credentials")
-            .form("client_id", ocr.getApiKey())
-            .form("client_secret", ocr.getSecretKey())
-            .timeout(5000)
-            .execute()
-            .body();
+        String response;
+        try (HttpResponse httpResponse = HttpRequest.get(TOKEN_URL)
+                .form("grant_type", "client_credentials")
+                .form("client_id", ocr.getApiKey())
+                .form("client_secret", ocr.getSecretKey())
+                .timeout(5000)
+                .execute()) {
+            response = httpResponse.body();
+        }
         if (!JSONUtil.isTypeJSON(response)) {
             throw new BusinessException("获取 OCR token 失败");
         }

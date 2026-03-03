@@ -18,6 +18,9 @@ package top.continew.admin.activity.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.io.file.FileNameUtil;
+import cn.hutool.core.util.ClassUtil;
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
@@ -28,6 +31,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.x.file.storage.core.FileInfo;
+import org.dromara.x.file.storage.core.FileStorageService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,7 +48,11 @@ import top.continew.admin.activity.service.SubsidyApplicationService;
 import top.continew.admin.activity.service.safety.SubsidyImageContentCheckService;
 import top.continew.admin.activity.service.safety.SubsidyOcrService;
 import top.continew.admin.common.context.UserContextHolder;
+import top.continew.admin.system.model.entity.StorageDO;
+import top.continew.admin.system.enums.FileTypeEnum;
 import top.continew.admin.system.service.FileService;
+import top.continew.admin.system.service.StorageService;
+import top.continew.starter.core.constant.StringConstants;
 import top.continew.starter.core.exception.BusinessException;
 import top.continew.starter.core.util.validation.CheckUtils;
 import top.continew.starter.extension.crud.model.query.PageQuery;
@@ -76,6 +84,8 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
     private final SubsidyReviewerScopeMapper reviewerScopeMapper;
 
     private final FileService fileService;
+    private final FileStorageService fileStorageService;
+    private final StorageService storageService;
     private final SubsidyOcrService subsidyOcrService;
     private final SubsidyImageContentCheckService imageContentCheckService;
     private final ActivityProperties properties;
@@ -120,8 +130,38 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
     public SubsidyFileUploadResp upload(MultipartFile file, String parentPath, Boolean needOcr, String ocrMappingKey) {
         CheckUtils.throwIf(file.isEmpty(), "文件不能为空");
         try {
-            FileInfo fileInfo = fileService.upload(file, StrUtil.blankToDefault(parentPath, properties.getUploadParentPath()),
-                    properties.getStorageCode());
+            // 获取存储配置
+            StorageDO storage = storageService.getByCode(properties.getStorageCode());
+            String uploadPath = StrUtil.blankToDefault(parentPath, properties.getUploadParentPath());
+
+            // 生成唯一文件名：UUID + 原始扩展名
+            String originalFilename = file.getOriginalFilename();
+            String extName = FileNameUtil.extName(originalFilename);
+            String uniqueFilename = IdUtil.fastSimpleUUID() + (StrUtil.isNotBlank(extName) ? "." + extName : "");
+
+            // 处理路径格式
+            String path = pretreatmentPath(uploadPath);
+
+            // 创建父级目录
+            fileService.createParentDir(uploadPath, storage);
+
+            // 直接使用 FileStorageService 上传
+            var uploadPretreatment = fileStorageService.of(file)
+                    .setPlatform(storage.getCode())
+                    .setPath(path)
+                    .setSaveFilename(uniqueFilename)
+                    .setOriginalFilename(originalFilename)
+                    .setHashCalculatorSha256(true)
+                    .putAttr(ClassUtil.getClassName(StorageDO.class, false), storage);
+
+            // 图片文件生成缩略图
+            if (FileTypeEnum.IMAGE.getExtensions().contains(extName)) {
+                uploadPretreatment.setIgnoreThumbnailException(true, true);
+                uploadPretreatment.thumbnail(img -> img.size(100, 100));
+            }
+
+            FileInfo fileInfo = uploadPretreatment.upload();
+
             imageContentCheckService.checkImage(fileInfo.getUrl());
 
             String ocrText = null;
@@ -133,7 +173,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             fileDO.setUserId(UserContextHolder.getUserId());
             fileDO.setStorageProvider(fileInfo.getPlatform());
             fileDO.setObjectKey(StrUtil.blankToDefault(fileInfo.getPath(), "") + fileInfo.getFilename());
-            fileDO.setFileName(fileInfo.getOriginalFilename());
+            fileDO.setFileName(originalFilename);
             fileDO.setMimeType(fileInfo.getContentType());
             fileDO.setFileSize(fileInfo.getSize());
             fileDO.setSha256(fileInfo.getHashInfo() == null ? null : fileInfo.getHashInfo().getSha256());
@@ -651,5 +691,25 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             return null;
         }
         return StrUtil.blankToDefault(value.getValueEnum(), value.getValueText());
+    }
+
+    /**
+     * 处理路径格式。
+     *
+     * <p>
+     * 1.如果 path 为 {@code /}，则设置为空 <br />
+     * 2.如果 path 不以 {@code /} 结尾，则添加后缀 {@code /} <br />
+     * 3.如果 path 以 {@code /} 开头，则移除前缀 {@code /} <br />
+     * 示例：yyyy/MM/dd/
+     * </p>
+     *
+     * @param path 路径
+     * @return 处理后的路径
+     */
+    private String pretreatmentPath(String path) {
+        if (StringConstants.SLASH.equals(path)) {
+            return StringConstants.EMPTY;
+        }
+        return StrUtil.appendIfMissing(StrUtil.removePrefix(path, StringConstants.SLASH), StringConstants.SLASH);
     }
 }
