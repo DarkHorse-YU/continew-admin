@@ -61,7 +61,6 @@ import top.continew.starter.extension.crud.model.resp.PageResp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -475,7 +474,8 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         }
         submissionMapper.insert(submission);
 
-        AtomicLong sampleFileId = new AtomicLong(0L);
+        // 记录所有 OCR 自动填充的字段信息（fieldId, fileId, ocrResult）
+        List<Object[]> ocrAutofillFields = new ArrayList<>();
         for (SubsidySubmitReq.FieldValueReq item : req.getFieldValues()) {
             SubsidyFormFieldDO field = fieldMap.get(item.getFieldCode());
             if (field == null) {
@@ -489,8 +489,9 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             value.setOcrAutofill(Optional.ofNullable(item.getOcrAutofill()).orElse(0));
             this.fillValue(field.getFieldType(), item.getValue(), value);
             submissionFieldValueMapper.insert(value);
-            if (item.getFileId() != null && sampleFileId.get() == 0L) {
-                sampleFileId.set(item.getFileId());
+            // 记录 OCR 自动填充的字段（有 fileId 且 ocrAutofill = 1）
+            if (item.getFileId() != null && Objects.equals(item.getOcrAutofill(), 1)) {
+                ocrAutofillFields.add(new Object[]{field.getId(), item.getFileId(), item.getOcrResult(), item.getValue()});
             }
         }
 
@@ -512,13 +513,34 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
                     .set(SubsidyReviewIssueDO::getFixedInSubmissionId, submission.getId()));
         }
 
-        if (sampleFileId.get() > 0) {
+        // 保存所有 OCR 识别留痕（每个 OCR 自动填充的字段都记录完整信息）
+        for (Object[] fieldFile : ocrAutofillFields) {
+            Long fieldId = (Long) fieldFile[0];
+            Long fileId = (Long) fieldFile[1];
+            @SuppressWarnings("unchecked")
+            Map<String, String> ocrResultMap = (Map<String, String>) fieldFile[2];
+            String adoptedValue = (String) fieldFile[3];
+
             SubsidyOcrResultDO ocrResult = new SubsidyOcrResultDO();
             ocrResult.setSubmissionId(submission.getId());
-            ocrResult.setFieldId(fieldMap.values().stream().findFirst().map(SubsidyFormFieldDO::getId).orElse(null));
-            ocrResult.setFileId(sampleFileId.get());
+            ocrResult.setFieldId(fieldId);
+            ocrResult.setFileId(fileId);
             ocrResult.setOcrEngine("BAIDU");
-            ocrResult.setIsAdopted(0);
+            ocrResult.setIsAdopted(1);
+
+            // 存储 OCR 原文和结构化 JSON
+            if (ocrResultMap != null && !ocrResultMap.isEmpty()) {
+                // rawText: 格式化原文（如 "姓名: 张三\n民族: 汉"）
+                String rawText = ocrResultMap.entrySet().stream()
+                        .map(e -> e.getKey() + ": " + e.getValue())
+                        .collect(Collectors.joining("\n"));
+                ocrResult.setRawText(rawText);
+                // parsedValue: 结构化 JSON（如 {"姓名":"张三","民族":"汉"}）
+                ocrResult.setParsedValue(JSONUtil.toJsonStr(ocrResultMap));
+            }
+
+            // 注：实际采用的值已存储在 submission_field_value 表中，此处无需重复存储
+
             ocrResultMapper.insert(ocrResult);
         }
         return application.getId();
@@ -557,7 +579,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
                 .filter(code -> !submitFieldCodes.contains(code))
                 .toList();
 
-        CheckUtils.throwIf(CollUtil.isNotEmpty(missing), "缺少必填字段: %s", String.join(",", missing));
+        CheckUtils.throwIf(CollUtil.isNotEmpty(missing), "缺少必填字段: {}", String.join(",", missing));
     }
 
     private void fillValue(String fieldType, String rawValue, SubsidySubmissionFieldValueDO value) {
