@@ -18,6 +18,8 @@ package top.continew.admin.activity.service.safety;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
+
 /**
  * OCR 识别服务。
  *
@@ -31,7 +33,7 @@ public interface SubsidyOcrService {
      *
      * @param file 上传文件
      * @param mappingKey OCR 映射键
-     * @return 识别文本
+     * @return 识别结果（key-value 形式，如身份证返回：{姓名: "xxx", 民族: "xxx", ...}）
      */
-    String recognize(MultipartFile file, String mappingKey);
+    Map<String, String> recognize(MultipartFile file, String mappingKey);
 }

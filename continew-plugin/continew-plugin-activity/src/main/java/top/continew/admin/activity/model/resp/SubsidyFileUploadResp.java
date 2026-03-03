@@ -22,6 +22,7 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.Map;
 
 /**
  * 文件上传返回。
@@ -40,5 +41,7 @@ public class SubsidyFileUploadResp implements Serializable {
     private Long subsidyFileId;
     private String url;
     private String thUrl;
-    private String ocrText;
+
+    @Schema(description = "OCR识别结果（key-value形式，如身份证返回：{姓名: \"xxx\", 民族: \"xxx\", ...}）")
+    private Map<String, String> ocrResult;
 }

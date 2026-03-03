@@ -164,9 +164,9 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
 
             imageContentCheckService.checkImage(fileInfo.getUrl());
 
-            String ocrText = null;
+            Map<String, String> ocrResult = null;
             if (Boolean.TRUE.equals(needOcr)) {
-                ocrText = subsidyOcrService.recognize(file, ocrMappingKey);
+                ocrResult = subsidyOcrService.recognize(file, ocrMappingKey);
             }
 
             SubsidyFileDO fileDO = new SubsidyFileDO();
@@ -183,7 +183,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
                     .subsidyFileId(fileDO.getId())
                     .url(fileInfo.getUrl())
                     .thUrl(fileInfo.getThUrl())
-                    .ocrText(ocrText)
+                    .ocrResult(ocrResult)
                     .build();
         } catch (Exception e) {
             Throwable root = e;

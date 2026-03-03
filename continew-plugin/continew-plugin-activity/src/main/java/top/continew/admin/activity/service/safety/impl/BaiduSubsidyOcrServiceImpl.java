@@ -35,7 +35,10 @@ import top.continew.starter.core.exception.BusinessException;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 百度 OCR 实现。
@@ -52,14 +55,14 @@ public class BaiduSubsidyOcrServiceImpl implements SubsidyOcrService {
     private final ActivityProperties properties;
 
     @Override
-    public String recognize(MultipartFile file, String mappingKey) {
+    public Map<String, String> recognize(MultipartFile file, String mappingKey) {
         ActivityProperties.Ocr ocr = properties.getOcr();
         if (!ocr.isEnabled() || StrUtil.isBlank(mappingKey)) {
-            return null;
+            return Collections.emptyMap();
         }
         ActivityProperties.Endpoint endpointConfig = ocr.getEndpoints().get(mappingKey);
         if (endpointConfig == null || StrUtil.isBlank(endpointConfig.getUrl())) {
-            return null;
+            return Collections.emptyMap();
         }
         String accessToken = this.getAccessToken(ocr);
         try {
@@ -92,7 +95,7 @@ public class BaiduSubsidyOcrServiceImpl implements SubsidyOcrService {
 
             if (!JSONUtil.isTypeJSON(response)) {
                 log.warn("OCR 返回非JSON响应: {}", response);
-                return null;
+                return Collections.emptyMap();
             }
 
             JSONObject responseObj = JSONUtil.parseObj(response);
@@ -101,50 +104,45 @@ public class BaiduSubsidyOcrServiceImpl implements SubsidyOcrService {
             String errorCode = responseObj.getStr("error_code");
             if (StrUtil.isNotBlank(errorCode)) {
                 log.warn("OCR 返回错误: error_code={}, error_msg={}", errorCode, responseObj.getStr("error_msg"));
-                return null;
+                return Collections.emptyMap();
             }
 
             // 获取 words_result，兼容不同OCR接口返回格式
             Object wordsResult = responseObj.get("words_result");
             if (wordsResult == null) {
                 log.warn("OCR 返回数据中没有 words_result: {}", response);
-                return null;
+                return Collections.emptyMap();
             }
 
-            // 处理不同类型的 words_result
-            StringBuilder resultBuilder = new StringBuilder();
+            // 处理不同类型的 words_result，返回 key-value 结构
+            Map<String, String> result = new LinkedHashMap<>();
             if (wordsResult instanceof JSONArray jsonArray) {
-                // 通用OCR等接口返回数组格式
-                jsonArray.stream()
+                // 通用OCR等接口返回数组格式，合并为 text 字段
+                String text = jsonArray.stream()
                     .map(item -> JSONUtil.parseObj(item).getStr("words"))
                     .filter(StrUtil::isNotBlank)
-                    .forEach(words -> {
-                        if (!resultBuilder.isEmpty()) {
-                            resultBuilder.append("\n");
-                        }
-                        resultBuilder.append(words);
-                    });
+                    .collect(Collectors.joining("\n"));
+                if (StrUtil.isNotBlank(text)) {
+                    result.put("text", text);
+                }
             } else if (wordsResult instanceof JSONObject wordsObj) {
-                // 身份证等接口返回对象格式
+                // 身份证等接口返回对象格式，保留 key-value 结构
                 wordsObj.forEach((key, value) -> {
                     if (value instanceof JSONObject valueObj) {
                         String words = valueObj.getStr("words");
                         if (StrUtil.isNotBlank(words)) {
-                            if (!resultBuilder.isEmpty()) {
-                                resultBuilder.append("\n");
-                            }
-                            resultBuilder.append(words);
+                            result.put(key, words);
                         }
                     }
                 });
             }
 
-            return !resultBuilder.isEmpty() ? resultBuilder.toString() : null;
+            return result;
         } catch (IOException e) {
             throw new BusinessException("OCR 识别失败: " + e.getMessage());
         } catch (Exception e) {
             log.warn("OCR 调用失败: {}", e.getMessage(), e);
-            return null;
+            return Collections.emptyMap();
         }
     }
 
