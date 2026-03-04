@@ -60,6 +60,12 @@ public class SubsidyFormFieldDO implements Serializable {
     /** 排序号。 */
     private Integer sortNo;
 
+    /** 字段分组名称（如：基本信息、车辆信息、银行卡信息）。 */
+    private String groupName;
+
+    /** 分组排序号（用于确定步骤顺序）。 */
+    private Integer groupSort;
+
     /** 枚举选项（JSON）。 */
     private String enumOptions;
 

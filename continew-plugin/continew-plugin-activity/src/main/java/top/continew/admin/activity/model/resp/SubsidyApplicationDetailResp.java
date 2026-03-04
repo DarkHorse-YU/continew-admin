@@ -22,7 +22,6 @@ import lombok.Data;
 import java.io.Serial;
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,8 +65,23 @@ public class SubsidyApplicationDetailResp implements Serializable {
         private LocalDateTime reviewedAt;
         private Long reviewerId;
         private String reviewComment;
-        private List<FieldValueResp> fieldValues = new ArrayList<>();
+        /** 字段值分组列表（按分组返回，与表单结构一致）。 */
+        private List<FieldGroupResp> groups = new ArrayList<>();
         private List<ReviewIssueResp> issues = new ArrayList<>();
+    }
+
+    /**
+     * 字段值分组。
+     */
+    @Data
+    public static class FieldGroupResp implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private String groupName;
+        private Integer groupSort;
+        private List<FieldValueResp> fields = new ArrayList<>();
     }
 
     @Data
@@ -79,12 +93,10 @@ public class SubsidyApplicationDetailResp implements Serializable {
         private Long fieldId;
         private String fieldCode;
         private String fieldName;
+        private String fieldType;
         private Integer valueSeq;
-        private String valueText;
-        private BigDecimal valueNumber;
-        private LocalDate valueDate;
-        private String valueEnum;
-        private String valueJson;
+        /** 字段值（统一返回字符串，前端根据 fieldType 自行处理）。 */
+        private String value;
         private Long fileId;
     }
 

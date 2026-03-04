@@ -48,8 +48,33 @@ public class SubsidyFormResp implements Serializable {
     private String templateCode;
     private String templateName;
     private Integer templateVersion;
-    private List<FieldResp> fields = new ArrayList<>();
 
+    /** 字段分组列表（按分组返回，支持多步填写）。 */
+    private List<GroupResp> groups = new ArrayList<>();
+
+    /**
+     * 字段分组。
+     */
+    @Data
+    @Schema(description = "字段分组")
+    public static class GroupResp implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        @Schema(description = "分组名称", example = "基本信息")
+        private String groupName;
+
+        @Schema(description = "分组排序号", example = "1")
+        private Integer groupSort;
+
+        @Schema(description = "分组下的字段列表")
+        private List<FieldResp> fields = new ArrayList<>();
+    }
+
+    /**
+     * 字段信息。
+     */
     @Data
     public static class FieldResp implements Serializable {
 

@@ -101,6 +101,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         List<SubsidyFormFieldDO> fields = formFieldMapper.selectList(new LambdaQueryWrapper<SubsidyFormFieldDO>()
                 .eq(SubsidyFormFieldDO::getTemplateId, template.getId())
                 .eq(SubsidyFormFieldDO::getStatus, 1)
+                .orderByAsc(SubsidyFormFieldDO::getGroupSort)
                 .orderByAsc(SubsidyFormFieldDO::getSortNo));
 
         SubsidyFormResp resp = new SubsidyFormResp();
@@ -114,11 +115,28 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         resp.setTemplateCode(template.getTemplateCode());
         resp.setTemplateName(template.getTemplateName());
         resp.setTemplateVersion(template.getVersionNo());
-        resp.setFields(fields.stream().map(field -> {
-            SubsidyFormResp.FieldResp fieldResp = BeanUtil.copyProperties(field, SubsidyFormResp.FieldResp.class);
-            fieldResp.setFieldId(field.getId());
-            return fieldResp;
-        }).toList());
+
+        // 按 groupName 分组返回
+        Map<String, List<SubsidyFormFieldDO>> groupedFields = fields.stream()
+                .collect(Collectors.groupingBy(
+                        field -> StrUtil.blankToDefault(field.getGroupName(), "默认分组"),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        List<SubsidyFormResp.GroupResp> groups = new ArrayList<>();
+        groupedFields.forEach((groupName, fieldList) -> {
+            SubsidyFormResp.GroupResp group = new SubsidyFormResp.GroupResp();
+            group.setGroupName(groupName);
+            group.setGroupSort(fieldList.get(0).getGroupSort());
+            group.setFields(fieldList.stream().map(field -> {
+                SubsidyFormResp.FieldResp fieldResp = BeanUtil.copyProperties(field, SubsidyFormResp.FieldResp.class);
+                fieldResp.setFieldId(field.getId());
+                return fieldResp;
+            }).toList());
+            groups.add(group);
+        });
+        resp.setGroups(groups);
+
         return resp;
     }
 
@@ -198,7 +216,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
     }
 
     /**
-     * ???????????
+     * 首次提交申报
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -407,23 +425,54 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         submissionResp.setSubmissionId(submission.getId());
 
         List<SubsidyFormFieldDO> fields = formFieldMapper.selectList(new LambdaQueryWrapper<SubsidyFormFieldDO>()
-                .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId()));
+                .eq(SubsidyFormFieldDO::getTemplateId, activity.getTemplateId())
+                .orderByAsc(SubsidyFormFieldDO::getGroupSort)
+                .orderByAsc(SubsidyFormFieldDO::getSortNo));
         Map<Long, SubsidyFormFieldDO> fieldMap = fields.stream().collect(Collectors.toMap(SubsidyFormFieldDO::getId, s -> s));
 
         List<SubsidySubmissionFieldValueDO> values = submissionFieldValueMapper.selectList(
                 new LambdaQueryWrapper<SubsidySubmissionFieldValueDO>()
                         .eq(SubsidySubmissionFieldValueDO::getSubmissionId, submission.getId())
                         .orderByAsc(SubsidySubmissionFieldValueDO::getFieldId, SubsidySubmissionFieldValueDO::getValueSeq));
-        submissionResp.setFieldValues(values.stream().map(value -> {
-            SubsidyApplicationDetailResp.FieldValueResp item = BeanUtil.copyProperties(value,
-                    SubsidyApplicationDetailResp.FieldValueResp.class);
-            SubsidyFormFieldDO field = fieldMap.get(value.getFieldId());
+
+        // 按 groupName 分组返回字段值
+        Map<Long, SubsidyFormFieldDO> valueFieldMap = fieldMap;
+        Map<String, List<SubsidyApplicationDetailResp.FieldValueResp>> groupedValues = new LinkedHashMap<>();
+        values.forEach(value -> {
+            SubsidyFormFieldDO field = valueFieldMap.get(value.getFieldId());
+            String groupName = (field != null && StrUtil.isNotBlank(field.getGroupName()))
+                    ? field.getGroupName()
+                    : "默认分组";
+            SubsidyApplicationDetailResp.FieldValueResp item = new SubsidyApplicationDetailResp.FieldValueResp();
+            item.setFieldId(value.getFieldId());
+            item.setValueSeq(value.getValueSeq());
+            item.setFileId(value.getFileId());
+            // 统一 value 字段，根据实际存储的值类型返回
+            item.setValue(this.getFieldValue(value));
             if (field != null) {
                 item.setFieldCode(field.getFieldCode());
                 item.setFieldName(field.getFieldName());
+                item.setFieldType(field.getFieldType());
             }
-            return item;
-        }).toList());
+            groupedValues.computeIfAbsent(groupName, k -> new ArrayList<>()).add(item);
+        });
+
+        // 构建分组列表（保持字段定义的顺序）
+        Map<String, Integer> groupNameSortMap = new LinkedHashMap<>();
+        fields.stream()
+                .filter(f -> StrUtil.isNotBlank(f.getGroupName()))
+                .forEach(f -> groupNameSortMap.putIfAbsent(f.getGroupName(), f.getGroupSort()));
+        List<SubsidyApplicationDetailResp.FieldGroupResp> groups = new ArrayList<>();
+        groupedValues.forEach((groupName, fieldValues) -> {
+            SubsidyApplicationDetailResp.FieldGroupResp group = new SubsidyApplicationDetailResp.FieldGroupResp();
+            group.setGroupName(groupName);
+            group.setGroupSort(groupNameSortMap.getOrDefault(groupName, 999));
+            group.setFields(fieldValues);
+            groups.add(group);
+        });
+        // 按 groupSort 排序
+        groups.sort(Comparator.comparingInt(SubsidyApplicationDetailResp.FieldGroupResp::getGroupSort));
+        submissionResp.setGroups(groups);
 
         List<SubsidyReviewIssueDO> issues = reviewIssueMapper.selectList(new LambdaQueryWrapper<SubsidyReviewIssueDO>()
                 .eq(SubsidyReviewIssueDO::getSubmissionId, submission.getId())
@@ -441,6 +490,28 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
 
         resp.setCurrentSubmission(submissionResp);
         return resp;
+    }
+
+    /**
+     * 获取字段值（统一返回字符串）。
+     */
+    private String getFieldValue(SubsidySubmissionFieldValueDO value) {
+        if (StrUtil.isNotBlank(value.getValueText())) {
+            return value.getValueText();
+        }
+        if (value.getValueNumber() != null) {
+            return value.getValueNumber().toString();
+        }
+        if (value.getValueDate() != null) {
+            return value.getValueDate().toString();
+        }
+        if (StrUtil.isNotBlank(value.getValueEnum())) {
+            return value.getValueEnum();
+        }
+        if (StrUtil.isNotBlank(value.getValueJson())) {
+            return value.getValueJson();
+        }
+        return null;
     }
 
     private Long doSubmit(SubsidyActivityDO activity,
@@ -560,7 +631,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
 
         for (SubsidyReviewReq.IssueReq issueReq : issues) {
             SubsidyFormFieldDO field = fieldMap.get(issueReq.getFieldCode());
-            CheckUtils.throwIfNull(field, "驳回字段编码无效: %s", issueReq.getFieldCode());
+            CheckUtils.throwIfNull(field, "驳回字段编码无效: {}", issueReq.getFieldCode());
             SubsidyReviewIssueDO issue = new SubsidyReviewIssueDO();
             issue.setSubmissionId(submission.getId());
             issue.setFieldId(field.getId());
