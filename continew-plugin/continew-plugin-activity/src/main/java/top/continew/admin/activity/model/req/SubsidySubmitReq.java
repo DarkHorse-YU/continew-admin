@@ -26,7 +26,6 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 用户提交申报请求。
@@ -72,8 +71,5 @@ public class SubsidySubmitReq implements Serializable {
 
         @Schema(description = "是否为 OCR 自动填充（0 否 1 是）", example = "0")
         private Integer ocrAutofill = 0;
-
-        @Schema(description = "OCR 识别结果（上传时返回的 ocrResult）")
-        private Map<String, String> ocrResult;
     }
 }

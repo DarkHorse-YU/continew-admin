@@ -474,7 +474,7 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
         }
         submissionMapper.insert(submission);
 
-        // 记录所有 OCR 自动填充的字段信息（fieldId, fileId, ocrResult）
+        // 记录所有 OCR 自动填充的字段（用于留痕）
         List<Object[]> ocrAutofillFields = new ArrayList<>();
         for (SubsidySubmitReq.FieldValueReq item : req.getFieldValues()) {
             SubsidyFormFieldDO field = fieldMap.get(item.getFieldCode());
@@ -489,9 +489,9 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             value.setOcrAutofill(Optional.ofNullable(item.getOcrAutofill()).orElse(0));
             this.fillValue(field.getFieldType(), item.getValue(), value);
             submissionFieldValueMapper.insert(value);
-            // 记录 OCR 自动填充的字段（有 fileId 且 ocrAutofill = 1）
-            if (item.getFileId() != null && Objects.equals(item.getOcrAutofill(), 1)) {
-                ocrAutofillFields.add(new Object[]{field.getId(), item.getFileId(), item.getOcrResult(), item.getValue()});
+            // 记录 OCR 自动填充的字段（ocrAutofill = 1）
+            if (Objects.equals(item.getOcrAutofill(), 1)) {
+                ocrAutofillFields.add(new Object[]{field.getId(), item.getFileId(), item.getValue()});
             }
         }
 
@@ -513,37 +513,40 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
                     .set(SubsidyReviewIssueDO::getFixedInSubmissionId, submission.getId()));
         }
 
-        // 保存所有 OCR 识别留痕（每个 OCR 自动填充的字段都记录完整信息）
-        for (Object[] fieldFile : ocrAutofillFields) {
-            Long fieldId = (Long) fieldFile[0];
-            Long fileId = (Long) fieldFile[1];
-            @SuppressWarnings("unchecked")
-            Map<String, String> ocrResultMap = (Map<String, String>) fieldFile[2];
-            String adoptedValue = (String) fieldFile[3];
+        // 保存 OCR 识别留痕（每个 OCR 自动填充的字段都记录）
+        this.saveOcrResults(submission.getId(), ocrAutofillFields);
+        return application.getId();
+    }
+
+    /**
+     * 保存 OCR 识别留痕（同一个 fileId + fieldId 只记录一次）。
+     *
+     * @param submissionId     提交版本 ID
+     * @param ocrAutofillFields OCR 自动填充的字段列表（fieldId, fileId, ocrValue）
+     */
+    private void saveOcrResults(Long submissionId, List<Object[]> ocrAutofillFields) {
+        for (Object[] fieldData : ocrAutofillFields) {
+            Long fieldId = (Long) fieldData[0];
+            Long fileId = (Long) fieldData[1];
+            String ocrValue = (String) fieldData[2];
+
+            // 同一个 fileId + fieldId 只记录一次，避免重复提交时重复记录
+            Long existCount = ocrResultMapper.selectCount(new LambdaQueryWrapper<SubsidyOcrResultDO>()
+                    .eq(SubsidyOcrResultDO::getFieldId, fieldId)
+                    .eq(SubsidyOcrResultDO::getFileId, fileId));
+            if (existCount > 0) {
+                continue;
+            }
 
             SubsidyOcrResultDO ocrResult = new SubsidyOcrResultDO();
-            ocrResult.setSubmissionId(submission.getId());
+            ocrResult.setSubmissionId(submissionId);
             ocrResult.setFieldId(fieldId);
             ocrResult.setFileId(fileId);
             ocrResult.setOcrEngine("BAIDU");
+            ocrResult.setRawText(ocrValue);
             ocrResult.setIsAdopted(1);
-
-            // 存储 OCR 原文和结构化 JSON
-            if (ocrResultMap != null && !ocrResultMap.isEmpty()) {
-                // rawText: 格式化原文（如 "姓名: 张三\n民族: 汉"）
-                String rawText = ocrResultMap.entrySet().stream()
-                        .map(e -> e.getKey() + ": " + e.getValue())
-                        .collect(Collectors.joining("\n"));
-                ocrResult.setRawText(rawText);
-                // parsedValue: 结构化 JSON（如 {"姓名":"张三","民族":"汉"}）
-                ocrResult.setParsedValue(JSONUtil.toJsonStr(ocrResultMap));
-            }
-
-            // 注：实际采用的值已存储在 submission_field_value 表中，此处无需重复存储
-
             ocrResultMapper.insert(ocrResult);
         }
-        return application.getId();
     }
 
     private void createReviewIssues(SubsidyApplicationDO application,

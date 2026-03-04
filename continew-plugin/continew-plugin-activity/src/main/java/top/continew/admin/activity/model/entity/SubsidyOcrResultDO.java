@@ -23,7 +23,6 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -52,14 +51,8 @@ public class SubsidyOcrResultDO implements Serializable {
     /** OCR 引擎名称。 */
     private String ocrEngine;
 
-    /** OCR 原文。 */
+    /** OCR 识别值（自动填充的值）。 */
     private String rawText;
-
-    /** 结构化识别值。 */
-    private String parsedValue;
-
-    /** 识别置信度。 */
-    private BigDecimal confidence;
 
     /** 是否采用：1 是 0 否。 */
     private Integer isAdopted;
