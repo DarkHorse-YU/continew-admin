@@ -21,7 +21,6 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +46,6 @@ public class SubsidyApplicationDetailResp implements Serializable {
     private Long userId;
     private String currentStatus;
     private Integer rejectCount;
-    private BigDecimal finalSubsidyAmount;
     private LocalDateTime approvedAt;
     private LocalDateTime createdAt;
     private SubmissionResp currentSubmission;
@@ -98,6 +96,16 @@ public class SubsidyApplicationDetailResp implements Serializable {
         /** 字段值（统一返回字符串，前端根据 fieldType 自行处理）。 */
         private String value;
         private Long fileId;
+
+        // ========== 模板字段信息（用于前端渲染） ==========
+        private Integer isRequired;
+        private Integer isUserEditable;
+        private Integer sortNo;
+        private String enumOptions;
+        private String validationRule;
+        private Integer ocrEnabled;
+        private String ocrMappingKey;
+        private Integer isCalculated;
     }
 
     @Data

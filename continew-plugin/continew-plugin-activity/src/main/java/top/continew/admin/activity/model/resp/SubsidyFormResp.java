@@ -92,5 +92,7 @@ public class SubsidyFormResp implements Serializable {
         private String validationRule;
         private Integer ocrEnabled;
         private String ocrMappingKey;
+        /** 是否为自动计算：1 是 0 否。 */
+        private Integer isCalculated;
     }
 }

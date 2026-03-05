@@ -43,7 +43,6 @@ public class SubsidyMyApplicationResp implements Serializable {
     private String activityName;
     private String currentStatus;
     private Integer rejectCount;
-    private BigDecimal finalSubsidyAmount;
     private LocalDateTime approvedAt;
     private String carType;
     private LocalDateTime createdAt;

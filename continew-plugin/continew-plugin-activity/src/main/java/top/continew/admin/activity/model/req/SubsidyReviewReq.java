@@ -23,7 +23,6 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,9 +45,6 @@ public class SubsidyReviewReq implements Serializable {
 
     @Schema(description = "审核备注")
     private String reviewComment;
-
-    @Schema(description = "最终补贴金额")
-    private BigDecimal finalSubsidyAmount;
 
     @Valid
     @Schema(description = "驳回问题列表（驳回时必填）")

@@ -44,7 +44,6 @@ public class SubsidyAdminApplicationResp implements Serializable {
     private String activityName;
     private Long userId;
     private String currentStatus;
-    private BigDecimal finalSubsidyAmount;
     private String carType;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

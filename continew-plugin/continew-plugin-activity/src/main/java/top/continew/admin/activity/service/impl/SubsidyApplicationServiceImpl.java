@@ -384,16 +384,12 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
             submission.setStatus(SubsidyConstants.SUBMISSION_STATUS_APPROVED);
             application.setCurrentStatus(SubsidyConstants.APP_STATUS_APPROVED);
             application.setApprovedAt(now);
-            application.setFinalSubsidyAmount(req.getFinalSubsidyAmount());
-            application.setFinalSubsidyDecidedAt(now);
             submissionMapper.updateById(submission);
 
             this.updateApplicationWithVersion(application,
                     new LambdaUpdateWrapper<SubsidyApplicationDO>()
                             .set(SubsidyApplicationDO::getCurrentStatus, application.getCurrentStatus())
-                            .set(SubsidyApplicationDO::getApprovedAt, application.getApprovedAt())
-                            .set(SubsidyApplicationDO::getFinalSubsidyAmount, application.getFinalSubsidyAmount())
-                            .set(SubsidyApplicationDO::getFinalSubsidyDecidedAt, application.getFinalSubsidyDecidedAt()));
+                            .set(SubsidyApplicationDO::getApprovedAt, application.getApprovedAt()));
             return;
         }
 
@@ -453,6 +449,15 @@ public class SubsidyApplicationServiceImpl implements SubsidyApplicationService 
                 item.setFieldCode(field.getFieldCode());
                 item.setFieldName(field.getFieldName());
                 item.setFieldType(field.getFieldType());
+                // 填充模板字段信息（用于前端渲染）
+                item.setIsRequired(field.getIsRequired());
+                item.setIsUserEditable(field.getIsUserEditable());
+                item.setSortNo(field.getSortNo());
+                item.setEnumOptions(field.getEnumOptions());
+                item.setValidationRule(field.getValidationRule());
+                item.setOcrEnabled(field.getOcrEnabled());
+                item.setOcrMappingKey(field.getOcrMappingKey());
+                item.setIsCalculated(field.getIsCalculated());
             }
             groupedValues.computeIfAbsent(groupName, k -> new ArrayList<>()).add(item);
         });

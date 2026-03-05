@@ -61,12 +61,6 @@ public class SubsidyApplicationDO implements Serializable {
     /** 驳回次数。 */
     private Integer rejectCount;
 
-    /** 最终补贴金额。 */
-    private BigDecimal finalSubsidyAmount;
-
-    /** 最终补贴金额确定时间。 */
-    private LocalDateTime finalSubsidyDecidedAt;
-
     /** 审核通过时间。 */
     private LocalDateTime approvedAt;
 

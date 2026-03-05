@@ -78,6 +78,9 @@ public class SubsidyFormFieldDO implements Serializable {
     /** OCR 映射键。 */
     private String ocrMappingKey;
 
+    /** 是否为自动计算：1 是 0 否。 */
+    private Integer isCalculated;
+
     /** 状态：1 启用 0 停用。 */
     private Integer status;
 
