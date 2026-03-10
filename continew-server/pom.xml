@@ -74,6 +74,13 @@
     <build>
         <!-- 设置构建的 jar 包名 -->
         <finalName>${project.parent.name}</finalName>
+        <!-- 启用资源过滤，替换 @xxx@ 变量 -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
             <!-- Spring Boot 可执行 JAR 打包插件 -->
             <plugin>

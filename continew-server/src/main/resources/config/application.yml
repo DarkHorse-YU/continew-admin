@@ -45,8 +45,8 @@ spring:
     name: ${application.id}
   ## 环境配置
   profiles:
-    # 启用的环境
-    active: ${PROFILES_ACTIVE:dev}
+    # 启用的环境（通过 Maven Profile 指定，默认 dev）
+    active: @profiles.active@
     include:
       - generator
   main:

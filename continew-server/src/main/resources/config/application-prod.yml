@@ -14,9 +14,9 @@ server:
 spring.datasource:
   type: com.zaxxer.hikari.HikariDataSource
   # 请务必提前创建好名为 continew_admin 的数据库，如果使用其他数据库名请注意同步修改 DB_NAME 配置
-  url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:continew_admin}?serverTimezone=Asia/Shanghai&useSSL=true&useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true&autoReconnect=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
-  username: ${DB_USER:root}
-  password: ${DB_PWD:123456}
+  url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:continew}?serverTimezone=Asia/Shanghai&useSSL=true&useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true&autoReconnect=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+  username: ${DB_USER:}
+  password: ${DB_PWD:}
   driver-class-name: com.mysql.cj.jdbc.Driver
   #  # PostgreSQL 配置
   #  url: jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5432}/${DB_NAME:continew_admin}?options=-c%20TimeZone=Asia/Shanghai&sslmode=prefer&channelBinding=prefer&stringtype=unspecified
@@ -52,7 +52,7 @@ spring.data:
     # 端口（默认 6379）
     port: ${REDIS_PORT:6379}
     # 密码（未设置密码时请注释掉）
-    password: ${REDIS_PWD:123456}
+    password: ${REDIS_PWD:}
     # 数据库索引
     database: ${REDIS_DB:0}
     # 连接超时时间
@@ -292,22 +292,27 @@ snail-job:
 activity:
   subsidy:
     upload-parent-path: /activity/subsidy/
-    storage-code: dev-minio
+    storage-code: dev_minio
     ocr:
-      enabled: false
-      api-key: ''
-      secret-key: ''
+      enabled: true
+      api-key: ${BAIDU_OCR_API_KEY:}
+      secret-key: ${BAIDU_OCR_SECRET_KEY:}
       endpoints:
-        id_card_portrait: ''
-        id_card_emblem: ''
-        bank_card: ''
-        invoice_image: ''
-        driving_license_main: ''
+        # 身份证正面
+        idcard-front:
+          url: https://aip.baidubce.com/rest/2.0/ocr/v1/idcard
+          params:
+            id_card_side: front
+        # 身份证反面
+        idcard-back:
+          url: https://aip.baidubce.com/rest/2.0/ocr/v1/idcard
+          params:
+            id_card_side: back
     safety:
       enabled: false
-      secret-id: ''
-      secret-key: ''
+      secret-id: ${TENCENT_SECRET_ID:}
+      secret-key: ${TENCENT_SECRET_KEY:}
       region: 'ap-guangzhou'
       endpoint: 'ims.tencentcloudapi.com'
-      biz-type: 'TencentCloudDefault'
+      biz-type: 'image_audit'
       timeout-ms: 3000
