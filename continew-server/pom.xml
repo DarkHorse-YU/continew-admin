@@ -34,6 +34,12 @@
             <artifactId>continew-plugin-activity</artifactId>
         </dependency>
 
+        <!-- 优惠券插件 -->
+        <dependency>
+            <groupId>top.continew.admin</groupId>
+            <artifactId>continew-plugin-coupon</artifactId>
+        </dependency>
+
         <!-- 租户插件 -->
         <dependency>
             <groupId>top.continew.admin</groupId>

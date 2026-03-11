@@ -17,6 +17,7 @@
 
     <modules>
         <module>continew-plugin-activity</module>
+        <module>continew-plugin-coupon</module>
         <module>continew-plugin-open</module>
         <module>continew-plugin-tenant</module>
         <module>continew-plugin-schedule</module>
