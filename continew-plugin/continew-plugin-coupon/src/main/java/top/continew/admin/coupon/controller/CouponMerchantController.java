@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2022-present Charles7c Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package top.continew.admin.coupon.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,9 +66,8 @@ public class CouponMerchantController {
      */
     @Operation(summary = "上传凭证文件", description = "上传图片或文件，返回文件ID与访问地址")
     @PostMapping("/upload")
-    public CouponFileUploadResp uploadFile(
-            @Parameter(description = "file") @RequestParam("file") MultipartFile file,
-            @Parameter(description = "upload parent path") @RequestParam(required = false) String parentPath) {
+    public CouponFileUploadResp uploadFile(@Parameter(description = "file") @RequestParam("file") MultipartFile file,
+                                           @Parameter(description = "upload parent path") @RequestParam(required = false) String parentPath) {
         return couponClaimService.uploadFile(file, parentPath);
     }
 
@@ -61,7 +76,8 @@ public class CouponMerchantController {
      */
     @Operation(summary = "查询核销列表", description = "分页查询当前核销员提交的核销记录")
     @GetMapping("/write-off/list")
-    public PageResp<CouponWriteOffListResp> listWriteOffs(@Valid CouponWriteOffQuery query, @Valid PageQuery pageQuery) {
+    public PageResp<CouponWriteOffListResp> listWriteOffs(@Valid CouponWriteOffQuery query,
+                                                          @Valid PageQuery pageQuery) {
         return couponClaimService.listWriteOffs(query, pageQuery);
     }
 

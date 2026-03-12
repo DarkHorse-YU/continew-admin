@@ -15,6 +15,7 @@
  */
 
 package top.continew.admin.coupon.mapper;
+
 import org.apache.ibatis.annotations.Mapper;
 import top.continew.admin.coupon.model.entity.CouponWriteOffReviewIssueDO;
 import top.continew.starter.data.mapper.BaseMapper;

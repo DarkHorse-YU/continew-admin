@@ -16,13 +16,35 @@
 
 package top.continew.admin.coupon.mapper;
 
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Mapper;
 import top.continew.admin.coupon.model.entity.CouponUserCouponDO;
+import top.continew.admin.coupon.model.query.CouponUserClaimStatsQuery;
 import top.continew.starter.data.mapper.BaseMapper;
+
+import java.time.LocalDateTime;
 
 /**
  * 用户券实例 Mapper
  */
 @Mapper
 public interface CouponUserCouponMapper extends BaseMapper<CouponUserCouponDO> {
+
+    @Select("""
+        SELECT
+            COUNT(1) AS totalClaimedCount,
+            COALESCE(SUM(CASE
+                WHEN claim_time >= #{dayStart} AND claim_time < #{dayEnd} THEN 1
+                ELSE 0
+            END), 0) AS todayClaimedCount
+        FROM coupon_user_coupon
+        WHERE template_id = #{templateId}
+          AND user_id = #{userId}
+          AND is_deleted = 0
+        """)
+    CouponUserClaimStatsQuery selectUserClaimStats(@Param("templateId") Long templateId,
+                                                   @Param("userId") Long userId,
+                                                   @Param("dayStart") LocalDateTime dayStart,
+                                                   @Param("dayEnd") LocalDateTime dayEnd);
 }
