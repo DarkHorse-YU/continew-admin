@@ -21,6 +21,10 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.file.FileNameUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import com.anji.captcha.model.common.RepCodeEnum;
+import com.anji.captcha.model.common.ResponseModel;
+import com.anji.captcha.model.vo.CaptchaVO;
+import com.anji.captcha.service.CaptchaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -30,7 +34,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.dromara.x.file.storage.core.FileInfo;
 import org.dromara.x.file.storage.core.FileStorageService;
 import org.redisson.api.RAtomicLong;
+import org.redisson.api.RLock;
+import org.redisson.api.RScript;
 import org.redisson.api.RedissonClient;
+import org.redisson.client.codec.StringCodec;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -56,6 +64,7 @@ import top.continew.starter.extension.crud.model.query.PageQuery;
 import top.continew.starter.extension.crud.model.resp.PageResp;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -85,39 +94,12 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     private final FileStorageService fileStorageService;
     private final StorageService storageService;
     private final RedissonClient redissonClient;
+    private final ObjectProvider<CaptchaService> captchaServiceProvider;
 
     // ==================== 用户端接口 ====================
 
     @Override
-    public PageResp<CouponActivityListResp> listActivities(PageQuery pageQuery) {
-        LambdaQueryWrapper<CouponActivityDO> wrapper = new LambdaQueryWrapper<CouponActivityDO>()
-                .eq(CouponActivityDO::getStatus, CouponConstants.STATUS_ENABLED)
-                .eq(CouponActivityDO::getIsDeleted, 0)
-                .orderByDesc(CouponActivityDO::getSortNo)
-                .orderByDesc(CouponActivityDO::getCreatedAt);
-
-        IPage<CouponActivityDO> page = activityMapper.selectPage(
-                new Page<>(pageQuery.getPage(), pageQuery.getSize()), wrapper);
-
-        PageResp<CouponActivityListResp> resp = PageResp.build(page, CouponActivityListResp.class);
-        LocalDateTime now = LocalDateTime.now();
-
-        resp.getList().forEach(item -> {
-            // 计算活动状态描述
-            if (now.isBefore(item.getClaimStartTime())) {
-                item.setStatusDesc("未开始");
-            } else if (now.isAfter(item.getClaimEndTime())) {
-                item.setStatusDesc("已结束");
-            } else {
-                item.setStatusDesc("进行中");
-            }
-        });
-
-        return resp;
-    }
-
-    @Override
-    public PageResp<CouponTemplateListResp> listTemplates(Long activityId, PageQuery pageQuery) {
+    public List<CouponTemplateListResp> listTemplates(Long activityId) {
         // 验证活动存在且有效
         CouponActivityDO activity = activityMapper.selectById(activityId);
         CheckUtils.throwIfNull(activity, "活动不存在");
@@ -132,14 +114,12 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                 .eq(CouponTemplateDO::getIsDeleted, 0)
                 .orderByAsc(CouponTemplateDO::getSortNo);
 
-        IPage<CouponTemplateDO> page = templateMapper.selectPage(
-                new Page<>(pageQuery.getPage(), pageQuery.getSize()), wrapper);
-
-        PageResp<CouponTemplateListResp> resp = PageResp.build(page, CouponTemplateListResp.class);
+        List<CouponTemplateDO> templates = templateMapper.selectList(wrapper);
+        List<CouponTemplateListResp> resp = BeanUtil.copyToList(templates, CouponTemplateListResp.class);
 
         // 填充用户已领数量和是否可领取
-        for (CouponTemplateListResp item : resp.getList()) {
-            CouponTemplateDO template = page.getRecords().stream()
+        for (CouponTemplateListResp item : resp) {
+            CouponTemplateDO template = templates.stream()
                     .filter(t -> t.getId().equals(item.getId()))
                     .findFirst()
                     .orElse(null);
@@ -151,6 +131,18 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                         .eq(CouponUserCouponDO::getUserId, userId)
                         .eq(CouponUserCouponDO::getIsDeleted, 0));
                 item.setUserClaimedCount(userClaimedCount.intValue());
+
+                Long userTodayClaimedCount = null;
+                if (template.getDailyClaimLimit() != null) {
+                    LocalDateTime dayStart = now.toLocalDate().atStartOfDay();
+                    LocalDateTime dayEnd = dayStart.plusDays(1);
+                    userTodayClaimedCount = userCouponMapper.selectCount(new LambdaQueryWrapper<CouponUserCouponDO>()
+                            .eq(CouponUserCouponDO::getTemplateId, template.getId())
+                            .eq(CouponUserCouponDO::getUserId, userId)
+                            .eq(CouponUserCouponDO::getIsDeleted, 0)
+                            .ge(CouponUserCouponDO::getClaimTime, dayStart)
+                            .lt(CouponUserCouponDO::getClaimTime, dayEnd));
+                }
 
                 // 计算剩余库存
                 int remainingStock = template.getTotalStock() - template.getClaimedStock();
@@ -172,6 +164,10 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                 } else if (userClaimedCount >= template.getPerUserLimit()) {
                     canClaim = false;
                     cannotReason = "已达领取上限";
+                } else if (template.getDailyClaimLimit() != null && userTodayClaimedCount != null
+                        && userTodayClaimedCount >= template.getDailyClaimLimit()) {
+                    canClaim = false;
+                    cannotReason = "已达每日领取上限";
                 }
 
                 item.setCanClaim(canClaim);
@@ -183,123 +179,90 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     }
 
     @Override
-    public CouponTemplateDetailResp getTemplateDetail(Long templateId) {
-        CouponTemplateDO template = templateMapper.selectById(templateId);
-        CheckUtils.throwIfNull(template, "券模板不存在");
-        CheckUtils.throwIfNotEqual(CouponConstants.STATUS_ENABLED, template.getStatus(), "券模板未启用");
-
-        CouponTemplateDetailResp resp = BeanUtil.copyProperties(template, CouponTemplateDetailResp.class);
-
-        // 如果需要凭证，查询表单模板
-        if (template.getFormTemplateId() != null) {
-            CouponFormTemplateDO formTemplate = formTemplateMapper.selectById(template.getFormTemplateId());
-            if (formTemplate != null) {
-                CouponTemplateDetailResp.FormTemplateResp formResp = new CouponTemplateDetailResp.FormTemplateResp();
-                formResp.setTemplateId(formTemplate.getId());
-                formResp.setTemplateName(formTemplate.getTemplateName());
-
-                // 查询字段
-                List<CouponFormFieldDO> fields = formFieldMapper.selectList(new LambdaQueryWrapper<CouponFormFieldDO>()
-                        .eq(CouponFormFieldDO::getTemplateId, formTemplate.getId())
-                        .eq(CouponFormFieldDO::getStatus, CouponConstants.STATUS_ENABLED)
-                        .eq(CouponFormFieldDO::getIsDeleted, 0)
-                        .orderByAsc(CouponFormFieldDO::getGroupSort)
-                        .orderByAsc(CouponFormFieldDO::getSortNo));
-
-                // 按分组整理
-                Map<String, List<CouponFormFieldDO>> groupedFields = fields.stream()
-                        .collect(Collectors.groupingBy(
-                                f -> StrUtil.blankToDefault(f.getGroupName(), "默认分组"),
-                                LinkedHashMap::new,
-                                Collectors.toList()));
-
-                List<CouponTemplateDetailResp.FormTemplateResp.GroupResp> groups = new ArrayList<>();
-                groupedFields.forEach((groupName, fieldList) -> {
-                    CouponTemplateDetailResp.FormTemplateResp.GroupResp group =
-                            new CouponTemplateDetailResp.FormTemplateResp.GroupResp();
-                    group.setGroupName(groupName);
-                    group.setGroupSort(fieldList.get(0).getGroupSort());
-                    group.setFields(fieldList.stream().map(f -> {
-                        CouponTemplateDetailResp.FormTemplateResp.FieldResp fieldResp =
-                                BeanUtil.copyProperties(f, CouponTemplateDetailResp.FormTemplateResp.FieldResp.class);
-                        fieldResp.setFieldId(f.getId());
-                        return fieldResp;
-                    }).toList());
-                    groups.add(group);
-                });
-
-                formResp.setGroups(groups);
-                resp.setFormTemplate(formResp);
-            }
-        }
-
-        return resp;
-    }
-
-    @Override
     @Transactional(rollbackFor = Exception.class)
     public Long claim(CouponClaimReq req) {
-        Long userId = UserContextHolder.getUserId();
-        CouponTemplateDO template = templateMapper.selectById(req.getTemplateId());
-        CheckUtils.throwIfNull(template, "券模板不存在");
-        CheckUtils.throwIfNotEqual(CouponConstants.STATUS_ENABLED, template.getStatus(), "券模板未启用");
-
-        CouponActivityDO activity = activityMapper.selectById(template.getActivityId());
-        CheckUtils.throwIfNull(activity, "活动不存在");
-        CheckUtils.throwIfNotEqual(CouponConstants.STATUS_ENABLED, activity.getStatus(), "活动未启用");
-
-        LocalDateTime now = LocalDateTime.now();
-        CheckUtils.throwIf(now.isBefore(activity.getClaimStartTime()), "抢券活动未开始");
-        CheckUtils.throwIf(now.isAfter(activity.getClaimEndTime()), "抢券活动已结束");
-
-        // TODO: 验证滑块验证token（需要集成滑块验证服务）
-        // captchaService.verify(req.getCaptchaToken());
-
-        // 检查用户是否已达到领取上限
-        Long userClaimedCount = userCouponMapper.selectCount(new LambdaQueryWrapper<CouponUserCouponDO>()
-                .eq(CouponUserCouponDO::getTemplateId, template.getId())
-                .eq(CouponUserCouponDO::getUserId, userId)
-                .eq(CouponUserCouponDO::getIsDeleted, 0));
-        CheckUtils.throwIf(userClaimedCount >= template.getPerUserLimit(), "已达领取上限");
-
-        // 使用 Redis 原子扣减库存（防止超卖）
-        String stockKey = "coupon:stock:" + template.getId();
-        RAtomicLong atomicStock = redissonClient.getAtomicLong(stockKey);
-
-        // 如果 Redis 中没有库存数据，从数据库初始化
-        if (!atomicStock.isExists()) {
-            atomicStock.set(template.getTotalStock() - template.getClaimedStock());
-        }
-
-        // 原子扣减
-        long remainingStock = atomicStock.decrementAndGet();
-        if (remainingStock < 0) {
-            atomicStock.incrementAndGet(); // 回滚
-            throw new BusinessException("券已抢光");
-        }
-
+        Long userId = Optional.ofNullable(UserContextHolder.getUserId()).orElse(req.getUserId());
+        CheckUtils.throwIfNull(userId, "未登录，请传 userId（仅压测）");
+//        this.verifyBehaviorCaptcha(req.getCaptchaToken());
+        RLock claimLock = redissonClient.getLock("coupon:claim:lock:" + req.getTemplateId() + ":" + userId);
+        boolean stockDeducted = false;
+        boolean stockRollback = false;
+        String stockKey = null;
         try {
-            // 生成券码和二维码Token
-            String couponNo = generateCouponNo();
-            String qrToken = IdUtil.fastSimpleUUID();
+            boolean locked = claimLock.tryLock(3, 8, TimeUnit.SECONDS);
+            CheckUtils.throwIf(!locked, "请求过于频繁，请稍后重试");
 
-            // 计算有效期
+            CouponTemplateDO template = templateMapper.selectById(req.getTemplateId());
+            CheckUtils.throwIfNull(template, "券模板不存在");
+            CheckUtils.throwIfNotEqual(CouponConstants.STATUS_ENABLED, template.getStatus(), "券模板未启用");
+
+            CouponActivityDO activity = activityMapper.selectById(template.getActivityId());
+            CheckUtils.throwIfNull(activity, "活动不存在");
+            CheckUtils.throwIfNotEqual(CouponConstants.STATUS_ENABLED, activity.getStatus(), "活动未启用");
+
+            LocalDateTime now = LocalDateTime.now();
+            CheckUtils.throwIf(now.isBefore(activity.getClaimStartTime()), "抢券活动未开始");
+            CheckUtils.throwIf(now.isAfter(activity.getClaimEndTime()), "抢券活动已结束");
+
+            Long userClaimedCount = userCouponMapper.selectCount(new LambdaQueryWrapper<CouponUserCouponDO>()
+                    .eq(CouponUserCouponDO::getTemplateId, template.getId())
+                    .eq(CouponUserCouponDO::getUserId, userId)
+                    .eq(CouponUserCouponDO::getIsDeleted, 0));
+            CheckUtils.throwIf(userClaimedCount >= template.getPerUserLimit(), "已达领取上限");
+
+            if (template.getDailyClaimLimit() != null) {
+                LocalDateTime dayStart = now.toLocalDate().atStartOfDay();
+                LocalDateTime dayEnd = dayStart.plusDays(1);
+                Long todayClaimedCount = userCouponMapper.selectCount(new LambdaQueryWrapper<CouponUserCouponDO>()
+                        .eq(CouponUserCouponDO::getTemplateId, template.getId())
+                        .eq(CouponUserCouponDO::getUserId, userId)
+                        .eq(CouponUserCouponDO::getIsDeleted, 0)
+                        .ge(CouponUserCouponDO::getClaimTime, dayStart)
+                        .lt(CouponUserCouponDO::getClaimTime, dayEnd));
+                CheckUtils.throwIf(todayClaimedCount >= template.getDailyClaimLimit(), "已达每日领取上限");
+            }
+
+            stockKey = "coupon:stock:" + template.getId();
+            long dbRemaining = Math.max(template.getTotalStock() - template.getClaimedStock(), 0);
+            RScript script = redissonClient.getScript(StringCodec.INSTANCE);
+            Long remainingStock = script.eval(
+                    RScript.Mode.READ_WRITE,
+                    """
+                    local stock = redis.call('GET', KEYS[1])
+                    if (not stock) then
+                        stock = tonumber(ARGV[1])
+                        redis.call('SET', KEYS[1], stock)
+                    else
+                        stock = tonumber(stock)
+                    end
+                    if (stock <= 0) then
+                        return -1
+                    end
+                    return redis.call('DECR', KEYS[1])
+                    """,
+                    RScript.ReturnType.INTEGER,
+                    Collections.singletonList(stockKey),
+                    String.valueOf(dbRemaining));
+            if (remainingStock == null || remainingStock < 0) {
+                throw new BusinessException("券已抢光");
+            }
+            stockDeducted = true;
+
             LocalDateTime validStartTime;
             LocalDateTime validEndTime;
             if (CouponConstants.VALID_TYPE_RELATIVE.equals(template.getValidType())) {
                 validStartTime = now;
-                validEndTime = now.plusDays(template.getValidDays());
+                validEndTime = now.plusDays(Optional.ofNullable(template.getValidDays()).orElse(0));
             } else {
                 validStartTime = template.getFixedValidStartTime();
                 validEndTime = template.getFixedValidEndTime();
             }
 
-            // 创建用户券实例
             CouponUserCouponDO userCoupon = new CouponUserCouponDO();
             userCoupon.setActivityId(activity.getId());
             userCoupon.setTemplateId(template.getId());
-            userCoupon.setCouponNo(couponNo);
-            userCoupon.setQrToken(qrToken);
+            userCoupon.setCouponNo(generateCouponNo());
+            userCoupon.setQrToken(IdUtil.fastSimpleUUID());
             userCoupon.setUserId(userId);
             userCoupon.setClaimTime(now);
             userCoupon.setValidStartTime(validStartTime);
@@ -309,24 +272,35 @@ public class CouponClaimServiceImpl implements CouponClaimService {
             userCoupon.setIsDeleted(0);
             userCouponMapper.insert(userCoupon);
 
-            // 更新数据库库存（异步或同步）
             int updated = templateMapper.update(null, new LambdaUpdateWrapper<CouponTemplateDO>()
                     .eq(CouponTemplateDO::getId, template.getId())
-                    .eq(CouponTemplateDO::getVersion, template.getVersion())
-                    .set(CouponTemplateDO::getClaimedStock, template.getClaimedStock() + 1)
+                    .eq(CouponTemplateDO::getIsDeleted, 0)
+                    .apply("claimed_stock < total_stock")
+                    .setSql("claimed_stock = claimed_stock + 1")
                     .setSql("version = version + 1"));
-
             if (updated == 0) {
-                // 乐观锁冲突，回滚 Redis 库存
-                atomicStock.incrementAndGet();
+                redissonClient.getAtomicLong(stockKey).incrementAndGet();
+                stockRollback = true;
                 throw new BusinessException("抢券失败，请重试");
             }
-
             return userCoupon.getId();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("抢券处理中断: templateId={}, userId={}", req.getTemplateId(), userId, e);
+            throw new BusinessException("请求处理中断，请重试");
         } catch (Exception e) {
-            // 异常时回滚 Redis 库存
-            atomicStock.incrementAndGet();
-            throw e;
+            if (stockDeducted && !stockRollback && StrUtil.isNotBlank(stockKey)) {
+                redissonClient.getAtomicLong(stockKey).incrementAndGet();
+            }
+            if (e instanceof BusinessException) {
+                throw (BusinessException)e;
+            }
+            log.error("抢券异常: templateId={}, userId={}", req.getTemplateId(), userId, e);
+            throw new BusinessException("系统繁忙，请稍后重试");
+        } finally {
+            if (claimLock.isHeldByCurrentThread()) {
+                claimLock.unlock();
+            }
         }
     }
 
@@ -334,10 +308,11 @@ public class CouponClaimServiceImpl implements CouponClaimService {
      * 生成券码
      */
     private String generateCouponNo() {
-        // 生成16位券码：时间戳(10位) + 随机数(6位)
-        String timestamp = String.valueOf(System.currentTimeMillis()).substring(3);
-        String random = String.format("%06d", new Random().nextInt(1000000));
-        return timestamp + random;
+        // 稳定唯一券码：CP + yyyyMMddHHmmss + 8位全局递增序号（跨实例唯一）
+        String timePart = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        String dayKey = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        long seq = redissonClient.getAtomicLong("coupon:no:seq:" + dayKey).incrementAndGet();
+        return "CP" + timePart + String.format("%08d", seq % 100000000);
     }
 
     @Override
@@ -391,6 +366,18 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         });
 
         return resp;
+    }
+
+    private void verifyBehaviorCaptcha(String captchaToken) {
+        CheckUtils.throwIf(StrUtil.isBlank(captchaToken), "滑块验证 token 不能为空");
+        CaptchaService captchaService = captchaServiceProvider.getIfAvailable();
+        if (captchaService == null) {
+            return;
+        }
+        CaptchaVO captchaVO = new CaptchaVO();
+        BeanUtil.setProperty(captchaVO, "captchaVerification", captchaToken);
+        ResponseModel verificationRes = captchaService.verification(captchaVO);
+        CheckUtils.throwIfNotEqual(verificationRes.getRepCode(), RepCodeEnum.SUCCESS.getCode(), verificationRes.getRepMsg());
     }
 
     private String getStatusDesc(String status) {
@@ -735,7 +722,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
             CouponFileDO fileDO = new CouponFileDO();
             fileDO.setUserId(UserContextHolder.getUserId());
             fileDO.setStorageProvider(fileInfo.getPlatform());
-            fileDO.setBucketName(fileInfo.getBucket());
+            fileDO.setBucketName(storage == null ? null : storage.getBucketName());
             fileDO.setFileName(StrUtil.blankToDefault(fileInfo.getPath(), "") + fileInfo.getFilename());
             fileDO.setOriginalName(originalFilename);
             fileDO.setUrl(fileInfo.getUrl());
@@ -751,7 +738,10 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                     .build();
         } catch (Exception e) {
             log.error("文件上传失败", e);
-            throw new BusinessException("文件上传失败: " + e.getMessage());
+            if (e instanceof BusinessException) {
+                throw (BusinessException)e;
+            }
+            throw new BusinessException("文件上传失败，请稍后重试");
         }
     }
 
@@ -762,7 +752,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         return StrUtil.appendIfMissing(StrUtil.removePrefix(path, StringConstants.SLASH), StringConstants.SLASH);
     }
 
-    // ==================== 以下是 CouponWriteOffService 接口的方法 ====================
+    // ==================== 商家端与审核端接口 ====================
 
     @Override
     public PageResp<CouponWriteOffListResp> listWriteOffs(CouponWriteOffQuery query, PageQuery pageQuery) {

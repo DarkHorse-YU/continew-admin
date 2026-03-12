@@ -96,6 +96,13 @@
                 <artifactId>continew-plugin-generator</artifactId>
                 <version>${revision}</version>
             </dependency>
+
+            <!-- 优惠券插件 -->
+            <dependency>
+                <groupId>top.continew.admin</groupId>
+                <artifactId>continew-plugin-coupon</artifactId>
+                <version>${revision}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

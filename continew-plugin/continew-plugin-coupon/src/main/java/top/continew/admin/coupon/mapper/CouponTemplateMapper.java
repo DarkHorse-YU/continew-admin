@@ -18,7 +18,7 @@ package top.continew.admin.coupon.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import top.continew.admin.coupon.model.entity.CouponTemplateDO;
-import top.continew.starter.extension.crud.mapper.BaseMapper;
+import top.continew.starter.data.mapper.BaseMapper;
 
 /**
  * 券模板 Mapper
