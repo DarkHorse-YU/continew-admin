@@ -65,7 +65,7 @@ public class CouponWriteOffDO implements Serializable {
     /** 幂等请求号 */
     private String requestNo;
 
-    /** 状态： PENDING_AUDIT=待审核, APPROVED=通过, REJECTED=驳回, CANCELLED=已撤销 */
+    /** 状态： UNSUBMITTED=待上传凭证, PENDING=待审核, APPROVED=通过, REJECTED=驳回, CANCELLED=已撤销 */
     private String status;
 
     /** 核销时间 */

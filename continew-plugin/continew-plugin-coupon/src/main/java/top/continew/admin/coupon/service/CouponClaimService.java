@@ -22,6 +22,7 @@ import top.continew.admin.coupon.model.query.CouponWriteOffQuery;
 import top.continew.admin.coupon.model.req.CouponClaimReq;
 import top.continew.admin.coupon.model.req.CouponReviewReq;
 import top.continew.admin.coupon.model.req.CouponWriteOffReq;
+import top.continew.admin.coupon.model.req.CouponWriteOffResubmitReq;
 import top.continew.admin.coupon.model.resp.*;
 import top.continew.starter.extension.crud.model.query.PageQuery;
 import top.continew.starter.extension.crud.model.resp.PageResp;
@@ -40,19 +41,14 @@ public interface CouponClaimService {
     Long claim(CouponClaimReq req);
 
     /**
-     * 查询我的券分页列表。
+     * 查询我的券列表（不分页）。
      */
-    PageResp<CouponMyCouponResp> listMyCoupons(CouponMyCouponQuery query, PageQuery pageQuery);
-
-    /**
-     * 查询我的券详情。
-     */
-    CouponMyCouponDetailResp getMyCouponDetail(Long id);
+    List<CouponMyCouponResp> listMyCoupons(CouponMyCouponQuery query);
 
     /**
      * 核销前准备信息查询。
      */
-    CouponWriteOffPrepareResp prepareWriteOff(String couponNo);
+    CouponWriteOffPrepareResp prepareWriteOff(String qrToken);
 
     /**
      * 商家提交核销。
@@ -77,7 +73,7 @@ public interface CouponClaimService {
     /**
      * 驳回后重新提交。
      */
-    Long resubmit(Long writeOffId, CouponWriteOffReq req);
+    Long resubmit(Long writeOffId, CouponWriteOffResubmitReq req);
 
     /**
      * 审核端查询待审核列表。

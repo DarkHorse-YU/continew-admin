@@ -44,4 +44,5 @@ public class CouponMyCouponResp {
     private LocalDateTime validStartTime;
     private LocalDateTime validEndTime;
     private Long writeOffId;
+    private LocalDateTime writeOffTime;
 }

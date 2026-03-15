@@ -34,13 +34,11 @@ public final class CouponConstants {
     public static final String VALID_TYPE_FIXED = "FIXED";
 
     public static final String USER_COUPON_STATUS_UNUSED = "UNUSED";
-    public static final String USER_COUPON_STATUS_LOCKED = "LOCKED";
-    public static final String USER_COUPON_STATUS_PENDING_AUDIT = "PENDING_AUDIT";
     public static final String USER_COUPON_STATUS_APPROVED = "APPROVED";
-    public static final String USER_COUPON_STATUS_REJECTED = "REJECTED";
     public static final String USER_COUPON_STATUS_EXPIRED = "EXPIRED";
     public static final String USER_COUPON_STATUS_CANCELLED = "CANCELLED";
 
+    public static final String WRITE_OFF_STATUS_PENDING_UPLOAD = "PENDING_UPLOAD";
     public static final String WRITE_OFF_STATUS_PENDING_AUDIT = "PENDING_AUDIT";
     public static final String WRITE_OFF_STATUS_APPROVED = "APPROVED";
     public static final String WRITE_OFF_STATUS_REJECTED = "REJECTED";

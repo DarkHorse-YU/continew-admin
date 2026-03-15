@@ -18,7 +18,6 @@ package top.continew.admin.coupon.controller;
 
 import cn.dev33.satoken.annotation.SaIgnore;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +27,6 @@ import top.continew.admin.coupon.model.query.CouponMyCouponQuery;
 import top.continew.admin.coupon.model.req.CouponClaimReq;
 import top.continew.admin.coupon.model.resp.*;
 import top.continew.admin.coupon.service.CouponClaimService;
-import top.continew.starter.extension.crud.model.query.PageQuery;
-import top.continew.starter.extension.crud.model.resp.PageResp;
 import java.util.List;
 
 @Tag(name = "抢券-用户端接口")
@@ -63,18 +60,9 @@ public class CouponUserController {
     /**
      * 查询我的券
      */
-    @Operation(summary = "查询我的券", description = "分页查询当前用户已领取券")
+    @Operation(summary = "查询我的券", description = "查询当前用户已领取券（不分页）")
     @GetMapping("/my-coupons")
-    public PageResp<CouponMyCouponResp> listMyCoupons(@Valid CouponMyCouponQuery query, @Valid PageQuery pageQuery) {
-        return couponClaimService.listMyCoupons(query, pageQuery);
-    }
-
-    /**
-     * 查询我的券详情
-     */
-    @Operation(summary = "查询我的券详情", description = "按券实例ID查询详情")
-    @GetMapping("/my-coupons/{id}")
-    public CouponMyCouponDetailResp getMyCouponDetail(@Parameter(description = "User coupon id") @PathVariable Long id) {
-        return couponClaimService.getMyCouponDetail(id);
+    public List<CouponMyCouponResp> listMyCoupons(@Valid CouponMyCouponQuery query) {
+        return couponClaimService.listMyCoupons(query);
     }
 }

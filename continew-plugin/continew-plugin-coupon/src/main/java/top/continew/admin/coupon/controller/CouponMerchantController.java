@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import top.continew.admin.coupon.model.query.CouponWriteOffQuery;
 import top.continew.admin.coupon.model.req.CouponWriteOffReq;
+import top.continew.admin.coupon.model.req.CouponWriteOffResubmitReq;
 import top.continew.admin.coupon.model.resp.CouponFileUploadResp;
 import top.continew.admin.coupon.model.resp.CouponWriteOffDetailResp;
 import top.continew.admin.coupon.model.resp.CouponWriteOffListResp;
@@ -46,16 +47,16 @@ public class CouponMerchantController {
     /**
      * 核销前校验券信息
      */
-    @Operation(summary = "核销预检", description = "根据券码查询券状态、权限与凭证要求")
+    @Operation(summary = "核销预检", description = "根据二维码令牌查询券状态、权限与券信息")
     @GetMapping("/write-off/prepare")
-    public CouponWriteOffPrepareResp prepareWriteOff(@RequestParam String couponNo) {
-        return couponClaimService.prepareWriteOff(couponNo);
+    public CouponWriteOffPrepareResp prepareWriteOff(@RequestParam String qrToken) {
+        return couponClaimService.prepareWriteOff(qrToken);
     }
 
     /**
      * 提交核销
      */
-    @Operation(summary = "提交核销", description = "商家发起核销，按活动配置决定是否进入审核")
+    @Operation(summary = "提交核销", description = "商家发起核销，若需凭证则进入未提交流程")
     @PostMapping("/write-off")
     public Long writeOff(@RequestBody @Valid CouponWriteOffReq req) {
         return couponClaimService.writeOff(req);
@@ -91,11 +92,11 @@ public class CouponMerchantController {
     }
 
     /**
-     * 驳回后重提
+     * 提交凭证/驳回后重提
      */
-    @Operation(summary = "驳回后重新提交", description = "核销审核驳回后，重新提交凭证内容")
+    @Operation(summary = "提交凭证", description = "待上传或审核驳回后，提交凭证内容进入审核")
     @PostMapping("/write-off/{id}/resubmit")
-    public Long resubmit(@PathVariable Long id, @RequestBody @Valid CouponWriteOffReq req) {
+    public Long resubmit(@PathVariable Long id, @RequestBody @Valid CouponWriteOffResubmitReq req) {
         return couponClaimService.resubmit(id, req);
     }
 }

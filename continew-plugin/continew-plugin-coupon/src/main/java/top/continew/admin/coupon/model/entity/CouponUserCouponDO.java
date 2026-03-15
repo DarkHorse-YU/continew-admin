@@ -63,7 +63,7 @@ public class CouponUserCouponDO implements Serializable {
     /** 失效时间 */
     private LocalDateTime validEndTime;
 
-    /** 状态：UNUSED=未使用，LOCKED=锁定中, PENDING_AUDIT=待审核, APPROVED=审核通过, REJECTED=审核驳回, EXPIRED=已过期, CANCELLED=已作废 */
+    /** 状态：UNUSED=未使用， APPROVED=已核销, EXPIRED=已过期, CANCELLED=已作废 */
     private String status;
 
     /** 核销记录ID */
