@@ -38,10 +38,15 @@ public class CouponWriteOffDetailResp {
     private BigDecimal discountRate;
     private BigDecimal discountAmount;
     private BigDecimal thresholdAmount;
+    private Long formTemplateId;
 
-    private Long userId;
-    private Long verifierUserId;
     private String writeOffMode;
+
+    private String userWriteOffStatus;
+    private String userWriteOffStatusDesc;
+
+    private String auditStatus;
+    private String auditStatusDesc;
 
     private String status;
     private String statusDesc;
@@ -54,6 +59,7 @@ public class CouponWriteOffDetailResp {
     private LocalDateTime auditTime;
     private String auditComment;
 
+    private List<FieldGroupResp> templateGroups;
     private SubmissionResp currentSubmission;
 
     @Data
@@ -87,6 +93,10 @@ public class CouponWriteOffDetailResp {
         private Integer isRequired;
         private Integer isEditable;
         private Integer sortNo;
+        private String enumOptions;
+        private String validationRule;
+        private Integer ocrEnabled;
+        private String ocrMappingKey;
         private Integer valueSeq;
         private String value;
         private Long fileId;

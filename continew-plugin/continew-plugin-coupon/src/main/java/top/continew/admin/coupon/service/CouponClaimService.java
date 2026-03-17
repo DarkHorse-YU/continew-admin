@@ -50,6 +50,8 @@ public interface CouponClaimService {
      */
     CouponWriteOffPrepareResp prepareWriteOff(String qrToken);
 
+    CouponFormResp getCurrentForm(Long templateId);
+
     /**
      * 商家提交核销。
      */
@@ -58,17 +60,19 @@ public interface CouponClaimService {
     /**
      * 上传凭证文件。
      */
-    CouponFileUploadResp uploadFile(MultipartFile file, String parentPath);
+    CouponFileUploadResp uploadFile(MultipartFile file, String parentPath, Boolean needOcr, String ocrMappingKey);
 
     /**
      * 商家查询核销列表。
      */
-    PageResp<CouponWriteOffListResp> listWriteOffs(CouponWriteOffQuery query, PageQuery pageQuery);
+    PageResp<CouponWriteOffListResp> listWriteOffs(PageQuery pageQuery);
 
     /**
      * 查询核销详情。
      */
     CouponWriteOffDetailResp getWriteOffDetail(Long id);
+
+    Long submit(Long writeOffId, CouponWriteOffResubmitReq req);
 
     /**
      * 驳回后重新提交。

@@ -14,22 +14,13 @@
  * limitations under the License.
  */
 
-package top.continew.admin.coupon.model.resp;
+package top.continew.admin.coupon.service.safety;
 
-import lombok.Builder;
-import lombok.Data;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
-@Data
-@Builder
-public class CouponFileUploadResp {
+public interface CouponOcrService {
 
-    private Long fileId;
-    private String url;
-    private String thUrl;
-    private String fileName;
-    private String originalName;
-    private Long size;
-    private Map<String, String> ocrResult;
+    Map<String, String> recognize(MultipartFile file, String mappingKey);
 }

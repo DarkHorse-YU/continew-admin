@@ -24,10 +24,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import top.continew.admin.coupon.model.query.CouponWriteOffQuery;
 import top.continew.admin.coupon.model.req.CouponWriteOffReq;
 import top.continew.admin.coupon.model.req.CouponWriteOffResubmitReq;
 import top.continew.admin.coupon.model.resp.CouponFileUploadResp;
+import top.continew.admin.coupon.model.resp.CouponFormResp;
 import top.continew.admin.coupon.model.resp.CouponWriteOffDetailResp;
 import top.continew.admin.coupon.model.resp.CouponWriteOffListResp;
 import top.continew.admin.coupon.model.resp.CouponWriteOffPrepareResp;
@@ -53,6 +53,12 @@ public class CouponMerchantController {
         return couponClaimService.prepareWriteOff(qrToken);
     }
 
+    @Operation(summary = "查询当前模板表单", description = "根据券模板 ID 查询当前核销凭证表单模板")
+    @GetMapping("/form")
+    public CouponFormResp getCurrentForm(@RequestParam Long templateId) {
+        return couponClaimService.getCurrentForm(templateId);
+    }
+
     /**
      * 提交核销
      */
@@ -68,8 +74,10 @@ public class CouponMerchantController {
     @Operation(summary = "上传凭证文件", description = "上传图片或文件，返回文件ID与访问地址")
     @PostMapping("/upload")
     public CouponFileUploadResp uploadFile(@Parameter(description = "file") @RequestParam("file") MultipartFile file,
-                                           @Parameter(description = "upload parent path") @RequestParam(required = false) String parentPath) {
-        return couponClaimService.uploadFile(file, parentPath);
+                                           @Parameter(description = "upload parent path") @RequestParam(required = false) String parentPath,
+                                           @Parameter(description = "need ocr") @RequestParam(required = false) Boolean needOcr,
+                                           @Parameter(description = "ocr mapping key") @RequestParam(required = false) String ocrMappingKey) {
+        return couponClaimService.uploadFile(file, parentPath, needOcr, ocrMappingKey);
     }
 
     /**
@@ -77,9 +85,8 @@ public class CouponMerchantController {
      */
     @Operation(summary = "查询核销列表", description = "分页查询当前核销员提交的核销记录")
     @GetMapping("/write-off/list")
-    public PageResp<CouponWriteOffListResp> listWriteOffs(@Valid CouponWriteOffQuery query,
-                                                          @Valid PageQuery pageQuery) {
-        return couponClaimService.listWriteOffs(query, pageQuery);
+    public PageResp<CouponWriteOffListResp> listWriteOffs(@Valid PageQuery pageQuery) {
+        return couponClaimService.listWriteOffs(pageQuery);
     }
 
     /**
@@ -94,9 +101,15 @@ public class CouponMerchantController {
     /**
      * 提交凭证/驳回后重提
      */
-    @Operation(summary = "提交凭证", description = "待上传或审核驳回后，提交凭证内容进入审核")
+    @Operation(summary = "首次提交凭证", description = "待上传凭证状态下，提交核销凭证进入审核")
+    @PostMapping("/write-off/{id}/submit")
+    public Long submit(@PathVariable("id") Long writeOffId, @RequestBody @Valid CouponWriteOffResubmitReq req) {
+        return couponClaimService.submit(writeOffId, req);
+    }
+
+    @Operation(summary = "重新提交凭证", description = "审核驳回后，重新提交核销凭证进入审核")
     @PostMapping("/write-off/{id}/resubmit")
-    public Long resubmit(@PathVariable Long id, @RequestBody @Valid CouponWriteOffResubmitReq req) {
-        return couponClaimService.resubmit(id, req);
+    public Long resubmit(@PathVariable("id") Long writeOffId, @RequestBody @Valid CouponWriteOffResubmitReq req) {
+        return couponClaimService.resubmit(writeOffId, req);
     }
 }

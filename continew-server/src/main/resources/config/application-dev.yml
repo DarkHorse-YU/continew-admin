@@ -315,3 +315,30 @@ activity:
       endpoint: 'ims.tencentcloudapi.com'
       biz-type: 'image_audit'
       timeout-ms: 3000
+
+--- ### Coupon Writeoff Config
+coupon:
+  writeoff:
+    upload-parent-path: /coupon/writeoff/
+    storage-code: dev_minio
+    ocr:
+      enabled: true
+      api-key: ${BAIDU_OCR_API_KEY:}
+      secret-key: ${BAIDU_OCR_SECRET_KEY:}
+      endpoints:
+        idcard-front:
+          url: https://aip.baidubce.com/rest/2.0/ocr/v1/idcard
+          params:
+            id_card_side: front
+        idcard-back:
+          url: https://aip.baidubce.com/rest/2.0/ocr/v1/idcard
+          params:
+            id_card_side: back
+    safety:
+      enabled: false
+      secret-id: ${TENCENT_SECRET_ID:}
+      secret-key: ${TENCENT_SECRET_KEY:}
+      region: 'ap-guangzhou'
+      endpoint: 'ims.tencentcloudapi.com'
+      biz-type: 'image_audit'
+      timeout-ms: 3000

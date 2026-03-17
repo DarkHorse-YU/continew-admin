@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,22 +14,9 @@
  * limitations under the License.
  */
 
-package top.continew.admin.coupon.model.resp;
+package top.continew.admin.coupon.service.safety;
 
-import lombok.Builder;
-import lombok.Data;
+public interface CouponImageContentCheckService {
 
-import java.util.Map;
-
-@Data
-@Builder
-public class CouponFileUploadResp {
-
-    private Long fileId;
-    private String url;
-    private String thUrl;
-    private String fileName;
-    private String originalName;
-    private Long size;
-    private Map<String, String> ocrResult;
+    void checkImage(String imageUrl);
 }

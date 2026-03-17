@@ -32,17 +32,19 @@ public class CouponWriteOffListResp {
 
     private Long templateId;
     private String templateName;
+    private Boolean needUploadProof;
 
     private String couponType;
     private BigDecimal discountRate;
     private BigDecimal discountAmount;
 
-    private Long userId;
-    private Long verifierUserId;
     private String writeOffMode;
 
-    private String status;
-    private String statusDesc;
+    private String userWriteOffStatus;
+    private String userWriteOffStatusDesc;
+
+    private String auditStatus;
+    private String auditStatusDesc;
 
     private Integer submissionCount;
     private Integer currentSubmissionNo;

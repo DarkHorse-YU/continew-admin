@@ -19,6 +19,7 @@ package top.continew.admin.coupon.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.file.FileNameUtil;
+import cn.hutool.core.util.ClassUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.anji.captcha.model.common.RepCodeEnum;
@@ -42,6 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import top.continew.admin.common.context.UserContextHolder;
+import top.continew.admin.coupon.config.CouponProperties;
 import top.continew.admin.coupon.constant.CouponConstants;
 import top.continew.admin.coupon.mapper.*;
 import top.continew.admin.coupon.model.entity.*;
@@ -56,6 +58,8 @@ import top.continew.admin.coupon.model.resp.*;
 import top.continew.admin.coupon.service.CouponClaimService;
 import top.continew.admin.coupon.service.CouponClaimTemplateCacheService;
 import top.continew.admin.coupon.service.CouponStockSyncService;
+import top.continew.admin.coupon.service.safety.CouponImageContentCheckService;
+import top.continew.admin.coupon.service.safety.CouponOcrService;
 import top.continew.admin.system.model.entity.StorageDO;
 import top.continew.admin.system.enums.FileTypeEnum;
 import top.continew.admin.system.service.FileService;
@@ -91,6 +95,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     private final CouponReviewerScopeMapper reviewerScopeMapper;
     private final CouponFileMapper fileMapper;
     private final CouponFormFieldMapper formFieldMapper;
+    private final CouponFormTemplateMapper formTemplateMapper;
     private final CouponWriteOffMapper writeOffMapper;
     private final CouponWriteOffSubmissionMapper submissionMapper;
     private final CouponWriteOffSubmissionValueMapper submissionValueMapper;
@@ -103,6 +108,9 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     private final ObjectProvider<CaptchaService> captchaServiceProvider;
     private final CouponClaimTemplateCacheService couponClaimTemplateCacheService;
     private final CouponStockSyncService couponStockSyncService;
+    private final CouponOcrService couponOcrService;
+    private final CouponImageContentCheckService imageContentCheckService;
+    private final CouponProperties properties;
 
     // ==================== 用户端接口 ====================
 
@@ -368,6 +376,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
             : templateMapper.selectByIds(templateIds)
                 .stream()
                 .collect(Collectors.toMap(CouponTemplateDO::getId, t -> t));
+
         Map<Long, CouponWriteOffDO> writeOffMap = CollUtil.isEmpty(writeOffIds)
             ? Collections.emptyMap()
             : writeOffMapper.selectByIds(writeOffIds)
@@ -479,6 +488,58 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         resp.setActivityId(activity.getId());
         resp.setActivityName(activity.getActivityName());
         resp.setTemplateId(template.getId());
+
+        return resp;
+    }
+
+    @Override
+    public CouponFormResp getCurrentForm(Long templateId) {
+        CouponTemplateDO template = templateMapper.selectById(templateId);
+        CheckUtils.throwIfNull(template, "券模板不存在");
+
+        CouponActivityDO activity = activityMapper.selectById(template.getActivityId());
+        CheckUtils.throwIfNull(activity, "活动不存在");
+        CheckUtils.throwIfNull(template.getFormTemplateId(), "当前模板无需上传凭证");
+
+        CouponFormTemplateDO formTemplate = formTemplateMapper.selectById(template.getFormTemplateId());
+        CheckUtils.throwIfNull(formTemplate, "表单模板不存在");
+
+        List<CouponFormFieldDO> fields = formFieldMapper.selectList(new LambdaQueryWrapper<CouponFormFieldDO>()
+            .eq(CouponFormFieldDO::getTemplateId, formTemplate.getId())
+            .eq(CouponFormFieldDO::getStatus, CouponConstants.STATUS_ENABLED)
+            .eq(CouponFormFieldDO::getIsDeleted, 0)
+            .orderByAsc(CouponFormFieldDO::getGroupSort)
+            .orderByAsc(CouponFormFieldDO::getSortNo));
+
+        CouponFormResp resp = new CouponFormResp();
+        resp.setActivityId(activity.getId());
+        resp.setActivityCode(activity.getActivityCode());
+        resp.setActivityName(activity.getActivityName());
+        resp.setAuditMode(activity.getAuditMode());
+        resp.setTemplateId(template.getId());
+        resp.setTemplateCode(template.getTemplateCode());
+        resp.setTemplateName(template.getTemplateName());
+        resp.setTemplateVersion(formTemplate.getVersionNo());
+        resp.setFormTemplateId(formTemplate.getId());
+
+        Map<String, List<CouponFormFieldDO>> groupedFields = fields.stream()
+            .collect(Collectors.groupingBy(field -> StrUtil.blankToDefault(field.getGroupName(), "默认分组"),
+                LinkedHashMap::new,
+                Collectors.toList()));
+
+        List<CouponFormResp.GroupResp> groups = new ArrayList<>();
+        groupedFields.forEach((groupName, fieldList) -> {
+            CouponFormResp.GroupResp group = new CouponFormResp.GroupResp();
+            group.setGroupName(groupName);
+            group.setGroupSort(fieldList.get(0).getGroupSort());
+            group.setFields(fieldList.stream().map(field -> {
+                CouponFormResp.FieldResp fieldResp = BeanUtil.copyProperties(field, CouponFormResp.FieldResp.class);
+                fieldResp.setFieldId(field.getId());
+                return fieldResp;
+            }).toList());
+            groups.add(group);
+        });
+        resp.setGroups(groups);
 
         return resp;
     }
@@ -609,12 +670,12 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     }
 
     @Override
-    public CouponFileUploadResp uploadFile(MultipartFile file, String parentPath) {
+    public CouponFileUploadResp uploadFile(MultipartFile file, String parentPath, Boolean needOcr, String ocrMappingKey) {
         CheckUtils.throwIf(file.isEmpty(), "文件不能为空");
 
         try {
-            StorageDO storage = storageService.getByCode("dev-minio");
-            String uploadPath = StrUtil.blankToDefault(parentPath, "/coupon/writeoff/");
+            StorageDO storage = storageService.getByCode(properties.getStorageCode());
+            String uploadPath = StrUtil.blankToDefault(parentPath, properties.getUploadParentPath());
 
             String originalFilename = file.getOriginalFilename();
             String extName = FileNameUtil.extName(originalFilename);
@@ -628,7 +689,8 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                 .setPath(path)
                 .setSaveFilename(uniqueFilename)
                 .setOriginalFilename(originalFilename)
-                .setHashCalculatorSha256(true);
+                .setHashCalculatorSha256(true)
+                .putAttr(ClassUtil.getClassName(StorageDO.class, false), storage);
 
             if (FileTypeEnum.IMAGE.getExtensions().contains(extName)) {
                 uploadPretreatment.setIgnoreThumbnailException(true, true);
@@ -636,6 +698,13 @@ public class CouponClaimServiceImpl implements CouponClaimService {
             }
 
             FileInfo fileInfo = uploadPretreatment.upload();
+
+            imageContentCheckService.checkImage(fileInfo.getUrl());
+
+            Map<String, String> ocrResult = null;
+            if (Boolean.TRUE.equals(needOcr)) {
+                ocrResult = couponOcrService.recognize(file, ocrMappingKey);
+            }
 
             CouponFileDO fileDO = new CouponFileDO();
             fileDO.setUserId(UserContextHolder.getUserId());
@@ -653,13 +722,24 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                 .fileId(fileDO.getId())
                 .url(fileInfo.getUrl())
                 .thUrl(fileInfo.getThUrl())
+                .fileName(fileDO.getFileName())
+                .originalName(fileDO.getOriginalName())
+                .size(fileDO.getFileSize())
+                .ocrResult(ocrResult)
                 .build();
         } catch (Exception e) {
-            log.error("文件上传失败", e);
-            if (e instanceof BusinessException) {
-                throw (BusinessException)e;
+            Throwable root = e;
+            while (root.getCause() != null) {
+                root = root.getCause();
             }
-            throw new BusinessException("文件上传失败，请稍后重试");
+            String rootMsg = StrUtil.blankToDefault(root.getMessage(), "");
+            log.error("coupon file upload failed, storageCode={}, parentPath={}, fileName={}, rootCause={}",
+                properties.getStorageCode(),
+                StrUtil.blankToDefault(parentPath, properties.getUploadParentPath()),
+                file.getOriginalFilename(),
+                rootMsg,
+                e);
+            throw new BusinessException(StrUtil.format("上传失败: {}", StrUtil.blankToDefault(rootMsg, e.getMessage())));
         }
     }
 
@@ -673,17 +753,12 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     // ==================== 商家端与审核端接口 ====================
 
     @Override
-    public PageResp<CouponWriteOffListResp> listWriteOffs(CouponWriteOffQuery query, PageQuery pageQuery) {
+    public PageResp<CouponWriteOffListResp> listWriteOffs(PageQuery pageQuery) {
         Long verifierUserId = UserContextHolder.getUserId();
 
         LambdaQueryWrapper<CouponWriteOffDO> wrapper = new LambdaQueryWrapper<CouponWriteOffDO>()
             .eq(CouponWriteOffDO::getVerifierUserId, verifierUserId)
             .eq(CouponWriteOffDO::getIsDeleted, 0)
-            .like(StrUtil.isNotBlank(query.getCouponNo()), CouponWriteOffDO::getCouponNo, query.getCouponNo())
-            .eq(query.getActivityId() != null, CouponWriteOffDO::getActivityId, query.getActivityId())
-            .eq(StrUtil.isNotBlank(query.getStatus()), CouponWriteOffDO::getStatus, query.getStatus())
-            .ge(query.getWriteOffStartTime() != null, CouponWriteOffDO::getWriteOffTime, query.getWriteOffStartTime())
-            .le(query.getWriteOffEndTime() != null, CouponWriteOffDO::getWriteOffTime, query.getWriteOffEndTime())
             .orderByDesc(CouponWriteOffDO::getWriteOffTime);
 
         IPage<CouponWriteOffDO> page = writeOffMapper.selectPage(new Page<>(pageQuery.getPage(), pageQuery
@@ -711,14 +786,27 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long resubmit(Long writeOffId, CouponWriteOffResubmitReq req) {
-        Long verifierUserId = UserContextHolder.getUserId();
-
+    public Long submit(Long writeOffId, CouponWriteOffResubmitReq req) {
         CouponWriteOffDO writeOff = writeOffMapper.selectById(writeOffId);
         CheckUtils.throwIfNull(writeOff, "核销记录不存在");
-        CheckUtils.throwIfNotEqual(verifierUserId, writeOff.getVerifierUserId(), "无权操作该核销记录");
-        CheckUtils.throwIf(!CouponConstants.WRITE_OFF_STATUS_PENDING_UPLOAD.equals(writeOff.getStatus())
-            && !CouponConstants.WRITE_OFF_STATUS_REJECTED.equals(writeOff.getStatus()), "仅待上传或驳回状态可提交凭证");
+        CheckUtils.throwIfNotEqual(UserContextHolder.getUserId(), writeOff.getVerifierUserId(), "无权操作该核销记录");
+        CheckUtils.throwIfNotEqual(CouponConstants.WRITE_OFF_STATUS_PENDING_UPLOAD, writeOff.getStatus(), "仅待上传凭证状态可首次提交");
+        return this.doSubmit(writeOff, req, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long resubmit(Long writeOffId, CouponWriteOffResubmitReq req) {
+        CouponWriteOffDO writeOff = writeOffMapper.selectById(writeOffId);
+        CheckUtils.throwIfNull(writeOff, "核销记录不存在");
+        CheckUtils.throwIfNotEqual(UserContextHolder.getUserId(), writeOff.getVerifierUserId(), "无权操作该核销记录");
+        CheckUtils.throwIfNotEqual(CouponConstants.WRITE_OFF_STATUS_REJECTED, writeOff.getStatus(), "仅驳回状态可重新提交凭证");
+        return this.doSubmit(writeOff, req, true);
+    }
+
+    private Long doSubmit(CouponWriteOffDO writeOff, CouponWriteOffResubmitReq req, boolean resubmit) {
+        Long writeOffId = writeOff.getId();
+        Long verifierUserId = UserContextHolder.getUserId();
 
         CouponTemplateDO template = templateMapper.selectById(writeOff.getTemplateId());
         CheckUtils.throwIfNull(template, "券模板不存在");
@@ -926,8 +1014,15 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     }
 
     private void fillWriteOffListResp(PageResp<CouponWriteOffListResp> resp, List<CouponWriteOffDO> records) {
+        Map<Long, CouponWriteOffDO> writeOffMap = records.stream()
+            .collect(Collectors.toMap(CouponWriteOffDO::getId, r -> r));
         Set<Long> activityIds = records.stream().map(CouponWriteOffDO::getActivityId).collect(Collectors.toSet());
         Set<Long> templateIds = records.stream().map(CouponWriteOffDO::getTemplateId).collect(Collectors.toSet());
+        Set<Long> claimIds = records.stream().map(CouponWriteOffDO::getClaimId).collect(Collectors.toSet());
+        Set<Long> currentSubmissionIds = records.stream()
+            .map(CouponWriteOffDO::getCurrentSubmissionId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
 
         Map<Long, CouponActivityDO> activityMap = CollUtil.isEmpty(activityIds)
             ? Collections.emptyMap()
@@ -941,7 +1036,20 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                 .stream()
                 .collect(Collectors.toMap(CouponTemplateDO::getId, t -> t));
 
+        Map<Long, CouponUserCouponDO> userCouponMap = CollUtil.isEmpty(claimIds)
+            ? Collections.emptyMap()
+            : userCouponMapper.selectByIds(claimIds)
+                .stream()
+                .collect(Collectors.toMap(CouponUserCouponDO::getId, c -> c));
+
+        Map<Long, CouponWriteOffSubmissionDO> submissionMap = CollUtil.isEmpty(currentSubmissionIds)
+            ? Collections.emptyMap()
+            : submissionMapper.selectByIds(currentSubmissionIds)
+                .stream()
+                .collect(Collectors.toMap(CouponWriteOffSubmissionDO::getId, s -> s));
+
         resp.getList().forEach(item -> {
+            CouponWriteOffDO writeOff = writeOffMap.get(item.getId());
             CouponActivityDO activity = activityMap.get(item.getActivityId());
             if (activity != null) {
                 item.setActivityName(activity.getActivityName());
@@ -950,12 +1058,27 @@ public class CouponClaimServiceImpl implements CouponClaimService {
             CouponTemplateDO template = templateMap.get(item.getTemplateId());
             if (template != null) {
                 item.setTemplateName(template.getTemplateName());
+                item.setNeedUploadProof(template.getFormTemplateId() != null);
                 item.setCouponType(template.getCouponType());
                 item.setDiscountRate(template.getDiscountRate());
                 item.setDiscountAmount(template.getDiscountAmount());
             }
 
-            item.setStatusDesc(getWriteOffStatusDesc(item.getStatus()));
+            if (writeOff != null) {
+                CouponUserCouponDO userCoupon = userCouponMap.get(writeOff.getClaimId());
+                if (userCoupon != null) {
+                    item.setUserWriteOffStatus(userCoupon.getStatus());
+                    item.setUserWriteOffStatusDesc(getStatusDesc(userCoupon.getStatus()));
+                }
+                item.setAuditStatus(writeOff.getStatus());
+                item.setAuditStatusDesc(getWriteOffStatusDesc(writeOff.getStatus()));
+                if (writeOff.getCurrentSubmissionId() != null) {
+                    CouponWriteOffSubmissionDO submission = submissionMap.get(writeOff.getCurrentSubmissionId());
+                    if (submission != null) {
+                        item.setCurrentSubmissionNo(submission.getSubmissionNo());
+                    }
+                }
+            }
 
             // 查询提交次数
             Long submissionCount = submissionMapper.selectCount(new LambdaQueryWrapper<CouponWriteOffSubmissionDO>()
@@ -977,7 +1100,15 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
     private CouponWriteOffDetailResp buildWriteOffDetailResp(CouponWriteOffDO writeOff) {
         CouponWriteOffDetailResp resp = BeanUtil.copyProperties(writeOff, CouponWriteOffDetailResp.class);
+        resp.setAuditStatus(writeOff.getStatus());
+        resp.setAuditStatusDesc(getWriteOffStatusDesc(writeOff.getStatus()));
         resp.setStatusDesc(getWriteOffStatusDesc(writeOff.getStatus()));
+
+        CouponUserCouponDO userCoupon = userCouponMapper.selectById(writeOff.getClaimId());
+        if (userCoupon != null) {
+            resp.setUserWriteOffStatus(userCoupon.getStatus());
+            resp.setUserWriteOffStatusDesc(getStatusDesc(userCoupon.getStatus()));
+        }
 
         // 填充活动和模板信息
         CouponActivityDO activity = activityMapper.selectById(writeOff.getActivityId());
@@ -992,6 +1123,8 @@ public class CouponClaimServiceImpl implements CouponClaimService {
             resp.setDiscountRate(template.getDiscountRate());
             resp.setDiscountAmount(template.getDiscountAmount());
             resp.setThresholdAmount(template.getThresholdAmount());
+            resp.setFormTemplateId(template.getFormTemplateId());
+            resp.setTemplateGroups(this.buildTemplateFieldGroups(template.getFormTemplateId()));
         }
 
         // 填充当前提交版本详情
@@ -1029,7 +1162,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                         CouponWriteOffDetailResp.FieldValueResp fieldValue = new CouponWriteOffDetailResp.FieldValueResp();
                         fieldValue.setFieldId(value.getFieldId());
                         fieldValue.setValueSeq(value.getValueSeq());
-                        fieldValue.setValue(value.getValueText());
+                        fieldValue.setValue(this.getSubmissionFieldValue(value));
                         fieldValue.setFileId(value.getFileId());
 
                         if (field != null) {
@@ -1039,6 +1172,10 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                             fieldValue.setIsRequired(field.getIsRequired());
                             fieldValue.setIsEditable(field.getIsEditable());
                             fieldValue.setSortNo(field.getSortNo());
+                            fieldValue.setEnumOptions(field.getEnumOptions());
+                            fieldValue.setValidationRule(field.getValidationRule());
+                            fieldValue.setOcrEnabled(field.getOcrEnabled());
+                            fieldValue.setOcrMappingKey(field.getOcrMappingKey());
                         }
 
                         // 查询文件URL
@@ -1100,5 +1237,73 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         }
 
         return resp;
+    }
+
+    private List<CouponWriteOffDetailResp.FieldGroupResp> buildTemplateFieldGroups(Long formTemplateId) {
+        if (formTemplateId == null) {
+            return Collections.emptyList();
+        }
+
+        List<CouponFormFieldDO> fields = formFieldMapper.selectList(new LambdaQueryWrapper<CouponFormFieldDO>()
+            .eq(CouponFormFieldDO::getTemplateId, formTemplateId)
+            .eq(CouponFormFieldDO::getStatus, CouponConstants.STATUS_ENABLED)
+            .eq(CouponFormFieldDO::getIsDeleted, 0)
+            .orderByAsc(CouponFormFieldDO::getGroupSort)
+            .orderByAsc(CouponFormFieldDO::getSortNo));
+        if (CollUtil.isEmpty(fields)) {
+            return Collections.emptyList();
+        }
+
+        Map<String, List<CouponWriteOffDetailResp.FieldValueResp>> groupedFields = new LinkedHashMap<>();
+        fields.forEach(field -> {
+            String groupName = StrUtil.blankToDefault(field.getGroupName(), "默认分组");
+            CouponWriteOffDetailResp.FieldValueResp item = new CouponWriteOffDetailResp.FieldValueResp();
+            item.setFieldId(field.getId());
+            item.setFieldCode(field.getFieldCode());
+            item.setFieldName(field.getFieldName());
+            item.setFieldType(field.getFieldType());
+            item.setIsRequired(field.getIsRequired());
+            item.setIsEditable(field.getIsEditable());
+            item.setSortNo(field.getSortNo());
+            item.setEnumOptions(field.getEnumOptions());
+            item.setValidationRule(field.getValidationRule());
+            item.setOcrEnabled(field.getOcrEnabled());
+            item.setOcrMappingKey(field.getOcrMappingKey());
+            groupedFields.computeIfAbsent(groupName, k -> new ArrayList<>()).add(item);
+        });
+
+        Map<String, Integer> groupSortMap = new LinkedHashMap<>();
+        fields.forEach(field -> groupSortMap.putIfAbsent(StrUtil.blankToDefault(field.getGroupName(), "默认分组"),
+            Optional.ofNullable(field.getGroupSort()).orElse(999)));
+
+        List<CouponWriteOffDetailResp.FieldGroupResp> groups = new ArrayList<>();
+        groupedFields.forEach((groupName, fieldValues) -> {
+            CouponWriteOffDetailResp.FieldGroupResp group = new CouponWriteOffDetailResp.FieldGroupResp();
+            group.setGroupName(groupName);
+            group.setGroupSort(groupSortMap.getOrDefault(groupName, 999));
+            group.setFields(fieldValues);
+            groups.add(group);
+        });
+        groups.sort(Comparator.comparingInt(CouponWriteOffDetailResp.FieldGroupResp::getGroupSort));
+        return groups;
+    }
+
+    private String getSubmissionFieldValue(CouponWriteOffSubmissionValueDO value) {
+        if (StrUtil.isNotBlank(value.getValueText())) {
+            return value.getValueText();
+        }
+        if (value.getValueNumber() != null) {
+            return value.getValueNumber().toString();
+        }
+        if (value.getValueDate() != null) {
+            return value.getValueDate().toString();
+        }
+        if (StrUtil.isNotBlank(value.getValueEnum())) {
+            return value.getValueEnum();
+        }
+        if (StrUtil.isNotBlank(value.getValueJson())) {
+            return value.getValueJson();
+        }
+        return null;
     }
 }
