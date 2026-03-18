@@ -20,18 +20,25 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * 核销请求参数
+ */
 @Data
-@Schema(description = "Write off request")
+@Schema(description = "核销请求")
 public class CouponWriteOffReq {
 
+    /** 券码 */
     @NotBlank(message = "couponNo can not be blank")
     private String couponNo;
 
+    /** 核销方式 */
     @NotBlank(message = "writeOffMode can not be blank")
     private String writeOffMode;
 
+    /** 幂等请求号 */
     @NotBlank(message = "requestNo can not be blank")
     private String requestNo;
 
+    /** 备注 */
     private String remark;
 }

@@ -21,19 +21,33 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 活动列表响应参数
+ */
 @Data
-@Schema(description = "Activity list item")
+@Schema(description = "活动列表项")
 public class CouponActivityListResp {
 
+    /** 活动 ID */
     private Long id;
+    /** 活动编码 */
     private String activityCode;
+    /** 活动名称 */
     private String activityName;
+    /** 活动描述 */
     private String description;
+    /** 抢券开始时间 */
     private LocalDateTime claimStartTime;
+    /** 抢券结束时间 */
     private LocalDateTime claimEndTime;
+    /** 核销开始时间 */
     private LocalDateTime verifyStartTime;
+    /** 核销结束时间 */
     private LocalDateTime verifyEndTime;
+    /** 审核模式 */
     private String auditMode;
+    /** 活动状态 */
     private String status;
+    /** 活动状态描述 */
     private String statusDesc;
 }

@@ -22,26 +22,39 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * 核销重提请求参数
+ */
 @Data
-@Schema(description = "Write off resubmit request")
+@Schema(description = "核销重提请求")
 public class CouponWriteOffResubmitReq {
 
+    /** 备注 */
     private String remark;
 
+    /** 字段值列表 */
     private List<FieldValueReq> fieldValues;
 
+    /**
+     * 字段值参数
+     */
     @Data
     public static class FieldValueReq {
 
+        /** 字段编码 */
         @NotBlank(message = "fieldCode can not be blank")
         private String fieldCode;
 
+        /** 同字段多值序号 */
         private Integer valueSeq;
 
+        /** 字段值 */
         private String value;
 
+        /** 文件 ID */
         private Long fileId;
 
+        /** 是否 OCR 自动填充 */
         private Integer ocrAutofill;
     }
 }

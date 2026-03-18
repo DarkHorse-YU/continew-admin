@@ -24,7 +24,9 @@ import lombok.Data;
 @Data
 public class CouponUserClaimStatsQuery {
 
+    /** 累计领券次数 */
     private Long totalClaimedCount;
 
+    /** 今日领券次数 */
     private Long todayClaimedCount;
 }

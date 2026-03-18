@@ -20,22 +20,37 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
+/**
+ * 核销准备信息响应参数
+ */
 @Data
 public class CouponWriteOffPrepareResp {
 
+    /** 是否可核销 */
     private Boolean canWriteOff;
+    /** 不可核销原因 */
     private String cannotReason;
 
+    /** 用户券 ID */
     private Long claimId;
+    /** 券码 */
     private String couponNo;
 
+    /** 活动 ID */
     private Long activityId;
+    /** 活动名称 */
     private String activityName;
+    /** 模板 ID */
     private Long templateId;
+    /** 模板名称 */
     private String templateName;
 
+    /** 券类型 */
     private String couponType;
+    /** 折扣比例 */
     private BigDecimal discountRate;
+    /** 优惠金额 */
     private BigDecimal discountAmount;
+    /** 使用门槛金额 */
     private BigDecimal thresholdAmount;
 }

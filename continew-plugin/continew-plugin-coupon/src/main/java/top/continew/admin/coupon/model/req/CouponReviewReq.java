@@ -22,24 +22,36 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * 核销审核请求参数
+ */
 @Data
-@Schema(description = "Review request")
+@Schema(description = "核销审核请求")
 public class CouponReviewReq {
 
+    /** 是否通过审核 */
     @NotNull(message = "approved can not be null")
     private Boolean approved;
 
+    /** 审核意见 */
     private String reviewComment;
 
+    /** 驳回问题列表 */
     private List<IssueReq> issues;
 
+    /**
+     * 驳回问题项
+     */
     @Data
     public static class IssueReq {
 
+        /** 字段编码 */
         private String fieldCode;
 
+        /** 问题编码 */
         private String issueCode;
 
+        /** 问题说明 */
         private String issueMessage;
     }
 }

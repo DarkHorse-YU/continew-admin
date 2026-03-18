@@ -21,15 +21,25 @@ import lombok.Data;
 
 import java.util.Map;
 
+/**
+ * 文件上传响应参数
+ */
 @Data
 @Builder
 public class CouponFileUploadResp {
 
+    /** 文件 ID */
     private Long fileId;
+    /** 文件访问地址 */
     private String url;
+    /** 缩略图地址 */
     private String thUrl;
+    /** 存储文件名 */
     private String fileName;
+    /** 原始文件名 */
     private String originalName;
+    /** 文件大小 */
     private Long size;
+    /** OCR 识别结果 */
     private Map<String, String> ocrResult;
 }

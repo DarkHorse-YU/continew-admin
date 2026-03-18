@@ -21,34 +21,60 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 核销列表响应参数
+ */
 @Data
 public class CouponWriteOffListResp {
 
+    /** 核销记录 ID */
     private Long id;
+    /** 券码 */
     private String couponNo;
 
+    /** 活动 ID */
     private Long activityId;
+    /** 活动名称 */
     private String activityName;
+    /** 部门 ID */
+    private Long deptId;
+    /** 部门名称 */
+    private String deptName;
 
+    /** 模板 ID */
     private Long templateId;
+    /** 模板名称 */
     private String templateName;
+    /** 是否需要上传凭证 */
     private Boolean needUploadProof;
 
+    /** 券类型 */
     private String couponType;
+    /** 折扣比例 */
     private BigDecimal discountRate;
+    /** 优惠金额 */
     private BigDecimal discountAmount;
 
+    /** 核销方式 */
     private String writeOffMode;
 
+    /** 用户券核销状态 */
     private String userWriteOffStatus;
+    /** 用户券核销状态描述 */
     private String userWriteOffStatusDesc;
 
+    /** 审核状态 */
     private String auditStatus;
+    /** 审核状态描述 */
     private String auditStatusDesc;
 
+    /** 提交次数 */
     private Integer submissionCount;
+    /** 当前提交版本号 */
     private Integer currentSubmissionNo;
 
+    /** 核销时间 */
     private LocalDateTime writeOffTime;
+    /** 审核时间 */
     private LocalDateTime auditTime;
 }

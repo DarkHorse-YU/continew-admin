@@ -19,24 +19,16 @@ package top.continew.admin.coupon.model.query;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import java.time.LocalDateTime;
-
+/**
+ * 核销记录查询条件
+ */
 @Data
-@Schema(description = "Write off query")
+@Schema(description = "核销记录查询条件")
 public class CouponWriteOffQuery {
 
-    @Schema(description = "coupon no")
-    private String couponNo;
+    /** 活动名称 */
+    private String activityName;
 
-    @Schema(description = "activity id")
-    private Long activityId;
-
-    @Schema(description = "write off status")
+    /** 审核状态 */
     private String status;
-
-    @Schema(description = "write off start time")
-    private LocalDateTime writeOffStartTime;
-
-    @Schema(description = "write off end time")
-    private LocalDateTime writeOffEndTime;
 }

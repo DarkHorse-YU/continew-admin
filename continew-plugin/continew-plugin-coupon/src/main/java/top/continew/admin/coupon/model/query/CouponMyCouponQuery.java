@@ -19,13 +19,18 @@ package top.continew.admin.coupon.model.query;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+/**
+ * 我的优惠券查询条件
+ */
 @Data
-@Schema(description = "My coupon query")
+@Schema(description = "我的优惠券查询条件")
 public class CouponMyCouponQuery {
 
-    @Schema(description = "coupon status")
+    /** 优惠券状态 */
+    @Schema(description = "优惠券状态")
     private String status;
 
-    @Schema(description = "activity id")
+    /** 活动 ID */
+    @Schema(description = "活动 ID")
     private Long activityId;
 }

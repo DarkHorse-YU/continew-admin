@@ -22,62 +22,113 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 券模板详情响应参数
+ */
 @Data
 public class CouponTemplateDetailResp {
 
+    /** 模板 ID */
     private Long id;
+    /** 活动 ID */
     private Long activityId;
+    /** 模板编码 */
     private String templateCode;
+    /** 模板名称 */
     private String templateName;
+    /** 模板描述 */
     private String description;
 
+    /** 券类型 */
     private String couponType;
+    /** 折扣比例 */
     private BigDecimal discountRate;
+    /** 优惠金额 */
     private BigDecimal discountAmount;
+    /** 使用门槛金额 */
     private BigDecimal thresholdAmount;
 
+    /** 总库存 */
     private Integer totalStock;
+    /** 已领取库存 */
     private Integer claimedStock;
+    /** 已核销库存 */
     private Integer writeOffStock;
+    /** 每人限领数量 */
     private Integer perUserLimit;
+    /** 每日限领数量 */
     private Integer dailyClaimLimit;
 
+    /** 有效期类型 */
     private String validType;
+    /** 有效天数 */
     private Integer validDays;
+    /** 固定有效期开始时间 */
     private LocalDateTime fixedValidStartTime;
+    /** 固定有效期结束时间 */
     private LocalDateTime fixedValidEndTime;
 
+    /** 表单模板 ID */
     private Long formTemplateId;
+    /** 表单模板信息 */
     private FormTemplateResp formTemplate;
 
+    /**
+     * 表单模板信息
+     */
     @Data
     public static class FormTemplateResp {
 
+        /** 模板 ID */
         private Long templateId;
+        /** 模板名称 */
         private String templateName;
+        /** 分组列表 */
         private List<GroupResp> groups;
 
+        /**
+         * 表单分组信息
+         */
         @Data
         public static class GroupResp {
+            /** 分组名称 */
             private String groupName;
+            /** 分组排序 */
             private Integer groupSort;
+            /** 字段列表 */
             private List<FieldResp> fields;
         }
 
+        /**
+         * 表单字段信息
+         */
         @Data
         public static class FieldResp {
+            /** 字段 ID */
             private Long fieldId;
+            /** 字段编码 */
             private String fieldCode;
+            /** 字段名称 */
             private String fieldName;
+            /** 字段类型 */
             private String fieldType;
+            /** 是否必填 */
             private Integer isRequired;
+            /** 是否可编辑 */
             private Integer isEditable;
+            /** 所属分组名称 */
             private String groupName;
+            /** 所属分组排序 */
             private Integer groupSort;
+            /** 排序号 */
             private Integer sortNo;
+            /** 枚举选项 */
             private String enumOptions;
+            /** 校验规则 */
             private String validationRule;
+            /** 是否启用 OCR */
             private Integer ocrEnabled;
+            /** OCR 映射键 */
             private String ocrMappingKey;
         }
     }

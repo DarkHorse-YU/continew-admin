@@ -99,7 +99,7 @@ public class CouponMerchantController {
     }
 
     /**
-     * 提交凭证/驳回后重提
+     * 提交凭证
      */
     @Operation(summary = "首次提交凭证", description = "待上传凭证状态下，提交核销凭证进入审核")
     @PostMapping("/write-off/{id}/submit")
@@ -107,6 +107,9 @@ public class CouponMerchantController {
         return couponClaimService.submit(writeOffId, req);
     }
 
+    /**
+     * 驳回后重提
+     */
     @Operation(summary = "重新提交凭证", description = "审核驳回后，重新提交核销凭证进入审核")
     @PostMapping("/write-off/{id}/resubmit")
     public Long resubmit(@PathVariable("id") Long writeOffId, @RequestBody @Valid CouponWriteOffResubmitReq req) {
