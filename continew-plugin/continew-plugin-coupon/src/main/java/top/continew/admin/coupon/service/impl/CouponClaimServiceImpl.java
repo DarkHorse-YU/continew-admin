@@ -197,9 +197,10 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long claim(CouponClaimReq req) {
-        Long userId = Optional.ofNullable(UserContextHolder.getUserId()).orElse(req.getUserId());
+//        Long userId = Optional.ofNullable(UserContextHolder.getUserId()).orElse(req.getUserId());
+        Long userId = UserContextHolder.getUserId();
         CheckUtils.throwIfNull(userId, "未登录，请传 userId（仅压测）");
-        //        this.verifyBehaviorCaptcha(req.getCaptchaToken());
+        this.verifyBehaviorCaptcha(req.getCaptchaToken());
         RLock claimLock = redissonClient.getLock("coupon:claim:lock:" + req.getTemplateId() + ":" + userId);
         boolean stockDeducted = false;
         boolean stockRollback = false;
@@ -402,6 +403,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                 item.setCouponType(template.getCouponType());
                 item.setDiscountRate(template.getDiscountRate());
                 item.setDiscountAmount(template.getDiscountAmount());
+                item.setThresholdAmount(template.getThresholdAmount());
             }
             CouponWriteOffDO writeOff = writeOffMap.get(item.getWriteOffId());
             if (writeOff != null) {
