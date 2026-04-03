@@ -77,7 +77,7 @@ public class SubsidyUserController {
     @Operation(summary = "查询我的申报列表", description = "分页查询当前用户的申报记录")
     @GetMapping("/application")
     public PageResp<SubsidyMyApplicationResp> pageMyApplications(@Valid SubsidyMyApplicationQuery query,
-                                                                  @Valid PageQuery pageQuery) {
+                                                                 @Valid PageQuery pageQuery) {
         return subsidyApplicationService.pageMyApplications(query, pageQuery);
     }
 

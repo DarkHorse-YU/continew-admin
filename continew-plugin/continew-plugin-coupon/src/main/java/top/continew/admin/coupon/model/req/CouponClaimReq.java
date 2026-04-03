@@ -33,9 +33,9 @@ public class CouponClaimReq {
     @Schema(description = "券模板 ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long templateId;
 
-//    /** 用户 ID */
-//    @Schema(description = "用户 ID（仅压测未登录场景使用，正常业务可不传）")
-//    private Long userId;
+    //    /** 用户 ID */
+    //    @Schema(description = "用户 ID（仅压测未登录场景使用，正常业务可不传）")
+    //    private Long userId;
 
     @Schema(description = "滑块验证 token", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "滑块验证 token 不能为空")

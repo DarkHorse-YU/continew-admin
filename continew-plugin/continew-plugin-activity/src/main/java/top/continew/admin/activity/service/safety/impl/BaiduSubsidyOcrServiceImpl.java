@@ -86,10 +86,10 @@ public class BaiduSubsidyOcrServiceImpl implements SubsidyOcrService {
             String url = endpointConfig.getUrl() + "?access_token=" + accessToken;
             String response;
             try (HttpResponse httpResponse = HttpRequest.post(url)
-                    .contentType(ContentType.FORM_URLENCODED.toString())
-                    .body(param)
-                    .timeout(5000)
-                    .execute()) {
+                .contentType(ContentType.FORM_URLENCODED.toString())
+                .body(param)
+                .timeout(5000)
+                .execute()) {
                 response = httpResponse.body();
             }
 
@@ -149,11 +149,11 @@ public class BaiduSubsidyOcrServiceImpl implements SubsidyOcrService {
     private String getAccessToken(ActivityProperties.Ocr ocr) {
         String response;
         try (HttpResponse httpResponse = HttpRequest.get(TOKEN_URL)
-                .form("grant_type", "client_credentials")
-                .form("client_id", ocr.getApiKey())
-                .form("client_secret", ocr.getSecretKey())
-                .timeout(5000)
-                .execute()) {
+            .form("grant_type", "client_credentials")
+            .form("client_id", ocr.getApiKey())
+            .form("client_secret", ocr.getSecretKey())
+            .timeout(5000)
+            .execute()) {
             response = httpResponse.body();
         }
         if (!JSONUtil.isTypeJSON(response)) {

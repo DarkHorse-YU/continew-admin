@@ -37,15 +37,12 @@ public interface SubsidySubmissionFieldValueMapper extends BaseMapper<SubsidySub
      * 按购车类型查询对应的提交版本 ID 列表。
      *
      * @param fieldIds 购车类型字段 ID 列表
-     * @param carType 购车类型
+     * @param carType  购车类型
      * @return 提交版本 ID 列表
      */
-    @Select({"<script>",
-        "select distinct submission_id from subsidy_submission_field_value",
-        "where field_id in",
+    @Select({"<script>", "select distinct submission_id from subsidy_submission_field_value", "where field_id in",
         "<foreach collection='fieldIds' item='item' open='(' close=')' separator=','>#{item}</foreach>",
-        "and (value_enum = #{carType} or value_text = #{carType})",
-        "</script>"})
+        "and (value_enum = #{carType} or value_text = #{carType})", "</script>"})
     List<Long> selectSubmissionIdsByFieldIdsAndCarType(@Param("fieldIds") List<Long> fieldIds,
-                                                        @Param("carType") String carType);
+                                                       @Param("carType") String carType);
 }

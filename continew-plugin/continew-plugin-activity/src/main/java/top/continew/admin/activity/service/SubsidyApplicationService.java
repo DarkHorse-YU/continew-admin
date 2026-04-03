@@ -53,7 +53,7 @@ public interface SubsidyApplicationService {
 
     /** 管理端查询申报列表。 */
     PageResp<SubsidyAdminApplicationResp> pageApplicationsForAdmin(SubsidyAdminApplicationQuery query,
-                                                                    PageQuery pageQuery);
+                                                                   PageQuery pageQuery);
 
     /** 管理端查询申报详情。 */
     SubsidyApplicationDetailResp getDetailForAdmin(Long id);

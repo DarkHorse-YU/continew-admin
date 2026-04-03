@@ -31,7 +31,7 @@ public interface SubsidyOcrService {
     /**
      * 对上传文件执行 OCR 识别。
      *
-     * @param file 上传文件
+     * @param file       上传文件
      * @param mappingKey OCR 映射键
      * @return 识别结果（key-value 形式，如身份证返回：{姓名: "xxx", 民族: "xxx", ...}）
      */

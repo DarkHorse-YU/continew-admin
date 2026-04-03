@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -85,13 +85,14 @@ public class TencentSubsidyImageContentCheckServiceImpl implements SubsidyImageC
             }
 
             log.warn("图片未通过腾讯云内容安全检测: suggestion={}, bizType={}, requestId={}, imageUrl={}", suggestion, request
-                    .getBizType(), response.getRequestId(), imageUrl);
+                .getBizType(), response.getRequestId(), imageUrl);
             if ("Review".equalsIgnoreCase(suggestion)) {
                 throw new BusinessException("图片需人工复审，暂不允许提交");
             }
             throw new BusinessException("图片未通过内容安全检测");
         } catch (TencentCloudSDKException e) {
-            log.error("腾讯云图片安全检测失败: code={}, requestId={}, message={}", e.getErrorCode(), e.getRequestId(), e.getMessage(), e);
+            log.error("腾讯云图片安全检测失败: code={}, requestId={}, message={}", e.getErrorCode(), e.getRequestId(), e
+                .getMessage(), e);
             throw new BusinessException("图片安全检测失败: " + e.getMessage());
         } catch (BusinessException e) {
             throw e;

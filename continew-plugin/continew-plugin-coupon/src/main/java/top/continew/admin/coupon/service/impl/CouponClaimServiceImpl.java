@@ -197,7 +197,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long claim(CouponClaimReq req) {
-//        Long userId = Optional.ofNullable(UserContextHolder.getUserId()).orElse(req.getUserId());
+        //        Long userId = Optional.ofNullable(UserContextHolder.getUserId()).orElse(req.getUserId());
         Long userId = UserContextHolder.getUserId();
         CheckUtils.throwIfNull(userId, "未登录，请传 userId（仅压测）");
         this.verifyBehaviorCaptcha(req.getCaptchaToken());
@@ -359,16 +359,9 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         List<CouponMyCouponResp> resp = BeanUtil.copyToList(records, CouponMyCouponResp.class);
 
         // 填充活动名称和模板名称
-        Set<Long> activityIds = records
-            .stream()
-            .map(CouponUserCouponDO::getActivityId)
-            .collect(Collectors.toSet());
-        Set<Long> templateIds = records
-            .stream()
-            .map(CouponUserCouponDO::getTemplateId)
-            .collect(Collectors.toSet());
-        Set<Long> writeOffIds = records
-            .stream()
+        Set<Long> activityIds = records.stream().map(CouponUserCouponDO::getActivityId).collect(Collectors.toSet());
+        Set<Long> templateIds = records.stream().map(CouponUserCouponDO::getTemplateId).collect(Collectors.toSet());
+        Set<Long> writeOffIds = records.stream()
             .map(CouponUserCouponDO::getWriteOffId)
             .filter(Objects::nonNull)
             .collect(Collectors.toSet());
@@ -532,9 +525,8 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         resp.setFormTemplateId(formTemplate.getId());
 
         Map<String, List<CouponFormFieldDO>> groupedFields = fields.stream()
-            .collect(Collectors.groupingBy(field -> StrUtil.blankToDefault(field.getGroupName(), "默认分组"),
-                LinkedHashMap::new,
-                Collectors.toList()));
+            .collect(Collectors.groupingBy(field -> StrUtil.blankToDefault(field
+                .getGroupName(), "默认分组"), LinkedHashMap::new, Collectors.toList()));
 
         List<CouponFormResp.GroupResp> groups = new ArrayList<>();
         groupedFields.forEach((groupName, fieldList) -> {
@@ -685,7 +677,10 @@ public class CouponClaimServiceImpl implements CouponClaimService {
     }
 
     @Override
-    public CouponFileUploadResp uploadFile(MultipartFile file, String parentPath, Boolean needOcr, String ocrMappingKey) {
+    public CouponFileUploadResp uploadFile(MultipartFile file,
+                                           String parentPath,
+                                           Boolean needOcr,
+                                           String ocrMappingKey) {
         CheckUtils.throwIf(file.isEmpty(), "文件不能为空");
 
         try {
@@ -748,12 +743,9 @@ public class CouponClaimServiceImpl implements CouponClaimService {
                 root = root.getCause();
             }
             String rootMsg = StrUtil.blankToDefault(root.getMessage(), "");
-            log.error("coupon file upload failed, storageCode={}, parentPath={}, fileName={}, rootCause={}",
-                properties.getStorageCode(),
-                StrUtil.blankToDefault(parentPath, properties.getUploadParentPath()),
-                file.getOriginalFilename(),
-                rootMsg,
-                e);
+            log.error("coupon file upload failed, storageCode={}, parentPath={}, fileName={}, rootCause={}", properties
+                .getStorageCode(), StrUtil.blankToDefault(parentPath, properties.getUploadParentPath()), file
+                    .getOriginalFilename(), rootMsg, e);
             throw new BusinessException(StrUtil.format("上传失败: {}", StrUtil.blankToDefault(rootMsg, e.getMessage())));
         }
     }
@@ -805,7 +797,8 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         CouponWriteOffDO writeOff = writeOffMapper.selectById(writeOffId);
         CheckUtils.throwIfNull(writeOff, "核销记录不存在");
         CheckUtils.throwIfNotEqual(UserContextHolder.getUserId(), writeOff.getVerifierUserId(), "无权操作该核销记录");
-        CheckUtils.throwIfNotEqual(CouponConstants.WRITE_OFF_STATUS_PENDING_UPLOAD, writeOff.getStatus(), "仅待上传凭证状态可首次提交");
+        CheckUtils.throwIfNotEqual(CouponConstants.WRITE_OFF_STATUS_PENDING_UPLOAD, writeOff
+            .getStatus(), "仅待上传凭证状态可首次提交");
         return this.doSubmit(writeOff, req, false);
     }
 
@@ -847,10 +840,8 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
         // 保存字段值
         if (template.getFormTemplateId() != null && CollUtil.isNotEmpty(req.getFieldValues())) {
-            this.saveSubmissionValues(submission.getId(),
-                template.getFormTemplateId(),
-                req.getFieldValues(),
-                ocrAutofillFields);
+            this.saveSubmissionValues(submission.getId(), template.getFormTemplateId(), req
+                .getFieldValues(), ocrAutofillFields);
         }
 
         // 更新核销记录状态
@@ -873,9 +864,9 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
     private void saveOcrResults(Long submissionId, List<Object[]> ocrAutofillFields) {
         for (Object[] fieldData : ocrAutofillFields) {
-            Long fieldId = (Long) fieldData[0];
-            Long fileId = (Long) fieldData[1];
-            String ocrValue = (String) fieldData[2];
+            Long fieldId = (Long)fieldData[0];
+            Long fileId = (Long)fieldData[1];
+            String ocrValue = (String)fieldData[2];
 
             Long existCount = ocrResultMapper.selectCount(new LambdaQueryWrapper<CouponWriteOffOcrResultDO>()
                 .eq(CouponWriteOffOcrResultDO::getFieldId, fieldId)
@@ -908,13 +899,10 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
         if (StrUtil.isNotBlank(query.getActivityName())) {
             activityIds = activityMapper.selectList(new LambdaQueryWrapper<CouponActivityDO>()
-                    .select(CouponActivityDO::getId)
-                    .in(CouponActivityDO::getId, activityIds)
-                    .like(CouponActivityDO::getActivityName, query.getActivityName())
-                    .eq(CouponActivityDO::getIsDeleted, 0))
-                .stream()
-                .map(CouponActivityDO::getId)
-                .toList();
+                .select(CouponActivityDO::getId)
+                .in(CouponActivityDO::getId, activityIds)
+                .like(CouponActivityDO::getActivityName, query.getActivityName())
+                .eq(CouponActivityDO::getIsDeleted, 0)).stream().map(CouponActivityDO::getId).toList();
             if (CollUtil.isEmpty(activityIds)) {
                 return PageResp.build(pageQuery.getPage(), pageQuery.getSize(), Collections.emptyList());
             }
@@ -922,8 +910,8 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
         LambdaQueryWrapper<CouponWriteOffDO> wrapper = new LambdaQueryWrapper<CouponWriteOffDO>()
             .in(CouponWriteOffDO::getActivityId, activityIds)
-            .eq(CouponWriteOffDO::getStatus,
-                StrUtil.blankToDefault(query.getStatus(), CouponConstants.WRITE_OFF_STATUS_PENDING_AUDIT))
+            .eq(CouponWriteOffDO::getStatus, StrUtil.blankToDefault(query
+                .getStatus(), CouponConstants.WRITE_OFF_STATUS_PENDING_AUDIT))
             .eq(CouponWriteOffDO::getIsDeleted, 0)
             .orderByDesc(CouponWriteOffDO::getWriteOffTime);
 
@@ -1109,9 +1097,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
         Map<Long, UserDO> userMap = CollUtil.isEmpty(userIds)
             ? Collections.emptyMap()
-            : userMapper.selectByIds(userIds)
-                .stream()
-                .collect(Collectors.toMap(UserDO::getId, u -> u));
+            : userMapper.selectByIds(userIds).stream().collect(Collectors.toMap(UserDO::getId, u -> u));
 
         Set<Long> deptIds = userMap.values()
             .stream()
@@ -1121,9 +1107,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
 
         Map<Long, DeptDO> deptMap = CollUtil.isEmpty(deptIds)
             ? Collections.emptyMap()
-            : deptMapper.selectByIds(deptIds)
-                .stream()
-                .collect(Collectors.toMap(DeptDO::getId, d -> d));
+            : deptMapper.selectByIds(deptIds).stream().collect(Collectors.toMap(DeptDO::getId, d -> d));
 
         resp.getList().forEach(item -> {
             CouponWriteOffDO writeOff = writeOffMap.get(item.getId());
@@ -1358,8 +1342,9 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         });
 
         Map<String, Integer> groupSortMap = new LinkedHashMap<>();
-        fields.forEach(field -> groupSortMap.putIfAbsent(StrUtil.blankToDefault(field.getGroupName(), "默认分组"),
-            Optional.ofNullable(field.getGroupSort()).orElse(999)));
+        fields.forEach(field -> groupSortMap.putIfAbsent(StrUtil.blankToDefault(field.getGroupName(), "默认分组"), Optional
+            .ofNullable(field.getGroupSort())
+            .orElse(999)));
 
         List<CouponWriteOffDetailResp.FieldGroupResp> groups = new ArrayList<>();
         groupedFields.forEach((groupName, fieldValues) -> {

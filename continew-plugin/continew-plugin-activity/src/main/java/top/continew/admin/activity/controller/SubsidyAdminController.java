@@ -50,7 +50,7 @@ public class SubsidyAdminController {
     @SaCheckPermission("activity:subsidy:review:list")
     @GetMapping("/application")
     public PageResp<SubsidyAdminApplicationResp> pageApplications(@Valid SubsidyAdminApplicationQuery query,
-                                                                   @Valid PageQuery pageQuery) {
+                                                                  @Valid PageQuery pageQuery) {
         return subsidyApplicationService.pageApplicationsForAdmin(query, pageQuery);
     }
 
