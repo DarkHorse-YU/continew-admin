@@ -39,5 +39,5 @@ public class CouponClaimReq {
 
     @Schema(description = "滑块验证 token", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "滑块验证 token 不能为空")
-    private String captchaToken;
+    private String captchaVerification;
 }

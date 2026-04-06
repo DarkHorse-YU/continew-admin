@@ -200,7 +200,7 @@ public class CouponClaimServiceImpl implements CouponClaimService {
         //        Long userId = Optional.ofNullable(UserContextHolder.getUserId()).orElse(req.getUserId());
         Long userId = UserContextHolder.getUserId();
         CheckUtils.throwIfNull(userId, "未登录，请传 userId（仅压测）");
-        this.verifyBehaviorCaptcha(req.getCaptchaToken());
+        this.verifyBehaviorCaptcha(req.getCaptchaVerification());
         RLock claimLock = redissonClient.getLock("coupon:claim:lock:" + req.getTemplateId() + ":" + userId);
         boolean stockDeducted = false;
         boolean stockRollback = false;
