@@ -48,6 +48,9 @@ public class SubsidyActivityDO implements Serializable {
     /** 活动名称。 */
     private String activityName;
 
+    /** 活动封面图片 URL。 */
+    private String cover;
+
     /** 绑定模板 ID。 */
     private Long templateId;
 

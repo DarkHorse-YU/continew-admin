@@ -46,6 +46,9 @@ public class CouponActivityDO implements Serializable {
     /** 活动名称 */
     private String activityName;
 
+    /** 活动封面图片 URL */
+    private String cover;
+
     /** 活动描述 */
     private String description;
 
